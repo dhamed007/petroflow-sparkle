@@ -14,16 +14,541 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          tenant_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          tenant_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          tenant_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_person: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          external_erp_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          phone: string | null
+          postal_code: string | null
+          region: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          external_erp_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          phone?: string | null
+          postal_code?: string | null
+          region?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          external_erp_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          phone?: string | null
+          postal_code?: string | null
+          region?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deliveries: {
+        Row: {
+          arrival_time: string | null
+          created_at: string
+          delivered_quantity: number | null
+          delivery_proof_url: string | null
+          departure_time: string | null
+          driver_id: string | null
+          gps_tracking: Json | null
+          id: string
+          notes: string | null
+          order_id: string
+          signature_url: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          vehicle_number: string | null
+        }
+        Insert: {
+          arrival_time?: string | null
+          created_at?: string
+          delivered_quantity?: number | null
+          delivery_proof_url?: string | null
+          departure_time?: string | null
+          driver_id?: string | null
+          gps_tracking?: Json | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          signature_url?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_number?: string | null
+        }
+        Update: {
+          arrival_time?: string | null
+          created_at?: string
+          delivered_quantity?: number | null
+          delivery_proof_url?: string | null
+          departure_time?: string | null
+          driver_id?: string | null
+          gps_tracking?: Json | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          signature_url?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory: {
+        Row: {
+          created_at: string
+          id: string
+          last_updated_by: string | null
+          location: string
+          max_capacity: number | null
+          min_threshold: number | null
+          product_type: string
+          quantity: number
+          tenant_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_updated_by?: string | null
+          location: string
+          max_capacity?: number | null
+          min_threshold?: number | null
+          product_type: string
+          quantity?: number
+          tenant_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_updated_by?: string | null
+          location?: string
+          max_capacity?: number | null
+          min_threshold?: number | null
+          product_type?: string
+          quantity?: number
+          tenant_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string | null
+          due_date: string | null
+          external_erp_id: string | null
+          id: string
+          invoice_number: string
+          order_id: string
+          paid_date: string | null
+          payment_method: string | null
+          status: string
+          tax_amount: number | null
+          tenant_id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string | null
+          due_date?: string | null
+          external_erp_id?: string | null
+          id?: string
+          invoice_number: string
+          order_id: string
+          paid_date?: string | null
+          payment_method?: string | null
+          status?: string
+          tax_amount?: number | null
+          tenant_id: string
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string | null
+          due_date?: string | null
+          external_erp_id?: string | null
+          id?: string
+          invoice_number?: string
+          order_id?: string
+          paid_date?: string | null
+          payment_method?: string | null
+          status?: string
+          tax_amount?: number | null
+          tenant_id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          delivery_address: string
+          delivery_city: string | null
+          delivery_region: string | null
+          external_erp_id: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          priority: string | null
+          product_type: string
+          quantity: number
+          requested_delivery_date: string | null
+          status: string
+          tenant_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_address: string
+          delivery_city?: string | null
+          delivery_region?: string | null
+          external_erp_id?: string | null
+          id?: string
+          notes?: string | null
+          order_number: string
+          priority?: string | null
+          product_type: string
+          quantity: number
+          requested_delivery_date?: string | null
+          status?: string
+          tenant_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_address?: string
+          delivery_city?: string | null
+          delivery_region?: string | null
+          external_erp_id?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          priority?: string | null
+          product_type?: string
+          quantity?: number
+          requested_delivery_date?: string | null
+          status?: string
+          tenant_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          contact_email: string
+          created_at: string
+          erp_config: Json | null
+          erp_sandbox_mode: boolean | null
+          erp_system: Database["public"]["Enums"]["erp_system"] | null
+          id: string
+          industry: string | null
+          is_active: boolean | null
+          logo_url: string | null
+          name: string
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          primary_color: string | null
+          secondary_color: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email: string
+          created_at?: string
+          erp_config?: Json | null
+          erp_sandbox_mode?: boolean | null
+          erp_system?: Database["public"]["Enums"]["erp_system"] | null
+          id?: string
+          industry?: string | null
+          is_active?: boolean | null
+          logo_url?: string | null
+          name: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string
+          created_at?: string
+          erp_config?: Json | null
+          erp_sandbox_mode?: boolean | null
+          erp_system?: Database["public"]["Enums"]["erp_system"] | null
+          id?: string
+          industry?: string | null
+          is_active?: boolean | null
+          logo_url?: string | null
+          name?: string
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_tenant_id: {
+        Args: { _user_id: string }
+        Returns: string
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_super_admin: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "super_admin"
+        | "tenant_admin"
+        | "dispatch_officer"
+        | "driver"
+        | "user"
+      erp_system: "sap" | "oracle" | "odoo" | "dynamics" | "mock"
+      subscription_plan: "free" | "pro" | "enterprise"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +675,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "super_admin",
+        "tenant_admin",
+        "dispatch_officer",
+        "driver",
+        "user",
+      ],
+      erp_system: ["sap", "oracle", "odoo", "dynamics", "mock"],
+      subscription_plan: ["free", "pro", "enterprise"],
+    },
   },
 } as const
