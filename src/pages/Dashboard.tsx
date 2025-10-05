@@ -27,7 +27,23 @@ export default function Dashboard() {
       return;
     }
 
-    fetchTenantData();
+    // Check if user has completed onboarding
+    const checkOnboarding = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.tenant_id) {
+        navigate('/onboarding');
+        return;
+      }
+
+      fetchTenantData();
+    };
+
+    checkOnboarding();
   }, [user, navigate]);
 
   const fetchTenantData = async () => {
