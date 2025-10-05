@@ -20,7 +20,7 @@ const CTA = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-            <Button size="xl" variant="hero">
+            <Button size="xl" variant="hero" onClick={() => window.location.href = '/auth'}>
               Get Started Free
               <ArrowRight className="w-5 h-5" />
             </Button>
