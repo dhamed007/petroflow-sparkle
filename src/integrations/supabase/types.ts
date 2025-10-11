@@ -1082,6 +1082,7 @@ export type Database = {
         | "user"
         | "sales_manager"
         | "sales_rep"
+        | "client"
       erp_entity_type:
         | "orders"
         | "customers"
@@ -1241,6 +1242,7 @@ export const Constants = {
         "user",
         "sales_manager",
         "sales_rep",
+        "client",
       ],
       erp_entity_type: [
         "orders",

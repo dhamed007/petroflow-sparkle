@@ -102,13 +102,13 @@ export default function Onboarding() {
 
       if (profileError) throw profileError;
 
-      // Assign basic user role
+      // Assign client role by default when joining
       const { error: roleError } = await supabase
         .from('user_roles')
         .insert({
           user_id: user.id,
           tenant_id: tenant.id,
-          role: 'user'
+          role: 'client'
         });
 
       if (roleError) throw roleError;

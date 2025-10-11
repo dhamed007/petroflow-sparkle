@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,7 +46,19 @@ export default function Auth() {
       const { error } = await signIn(signInEmail, signInPassword);
       
       if (!error) {
-        navigate('/dashboard');
+        // Check if user has tenant - if not, go to onboarding
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('tenant_id')
+          .eq('id', (await supabase.auth.getUser()).data.user?.id)
+          .single();
+        
+        if (!profile?.tenant_id) {
+          navigate('/onboarding');
+        } else {
+          // Will be redirected based on role via AuthGuard
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
