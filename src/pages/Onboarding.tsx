@@ -93,12 +93,19 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
+      // Trim and lowercase the slug for case-insensitive matching
+      const cleanedSlug = tenantSlug.trim().toLowerCase();
+
+      if (!cleanedSlug) {
+        throw new Error('Please enter an organization code.');
+      }
+
       // Find tenant by slug
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
         .select('*')
-        .eq('slug', tenantSlug)
-        .single();
+        .eq('slug', cleanedSlug)
+        .maybeSingle();
 
       if (tenantError || !tenant) {
         throw new Error('Tenant not found. Please check the organization code.');
