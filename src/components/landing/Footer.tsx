@@ -6,9 +6,12 @@ const Footer = () => {
       <div className="container mx-auto px-4 py-12">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Activity className="w-6 h-6 text-accent" />
-              <span className="text-xl font-bold">PetroFlow</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Activity className="w-6 h-6 text-accent" />
+                <span className="text-xl font-bold">PetroFlow</span>
+              </div>
+              <p className="text-xs text-muted-foreground">by Visionsedge Technologies</p>
             </div>
             <p className="text-sm text-muted-foreground">
               Enterprise petroleum distribution management platform trusted by 500+ companies worldwide.
@@ -47,7 +50,7 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-border pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
-          <p>&copy; 2025 PetroFlow. All rights reserved.</p>
+          <p>&copy; 2024 Visionsedge Technologies. All rights reserved.</p>
           <div className="flex gap-6">
             <a href="#" className="hover:text-accent transition-smooth">Privacy Policy</a>
             <a href="#" className="hover:text-accent transition-smooth">Terms of Service</a>

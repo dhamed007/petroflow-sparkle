@@ -15,13 +15,12 @@ const CTA = () => {
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold">
             Ready to Transform Your{" "}
             <span className="gradient-accent bg-clip-text text-transparent">
-              Operations?
+              Logistics Operations?
             </span>
           </h2>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Join hundreds of enterprises already optimizing their petroleum distribution with PetroFlow. 
-            Start your free 14-day trial—no credit card required.
+            Join leading petroleum companies who trust PetroFlow for their supply chain management.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">

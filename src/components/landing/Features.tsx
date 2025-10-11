@@ -14,48 +14,33 @@ import {
 const features = [
   {
     icon: Activity,
-    title: "Real-Time Fleet Monitoring",
-    description: "Track every vehicle, monitor fuel levels, and get instant alerts on anomalies. GPS-enabled tracking with 99.9% accuracy.",
-  },
-  {
-    icon: Truck,
-    title: "Smart Route Optimization",
-    description: "AI-powered algorithms reduce fuel costs by up to 30% and delivery times by 25% through intelligent routing.",
-  },
-  {
-    icon: BarChart3,
-    title: "Predictive Analytics",
-    description: "Forecast demand, prevent stockouts, and optimize inventory with machine learning models trained on industry data.",
+    title: "Real-time Tracking",
+    description: "Track your deliveries and fleet in real-time with GPS integration",
   },
   {
     icon: Database,
-    title: "ERP Integration",
-    description: "Seamless connectivity with SAP, Oracle, Dynamics, and Odoo. Bi-directional sync with real-time data exchange.",
-  },
-  {
-    icon: Shield,
-    title: "Enterprise-Grade Security",
-    description: "SOC 2 Type II certified, GDPR compliant, with role-based access control and comprehensive audit trails.",
+    title: "Product Management",
+    description: "Manage petroleum products including diesel, petrol, and kerosene",
   },
   {
     icon: Users,
-    title: "Multi-Tenant Architecture",
-    description: "Manage multiple companies, sites, and teams with complete data isolation and customizable branding per tenant.",
+    title: "Multi-role Access",
+    description: "Separate portals for clients, administrators, and drivers",
   },
   {
-    icon: Zap,
-    title: "Automated Workflows",
-    description: "Eliminate manual processes with smart automation for order creation, dispatch, invoicing, and compliance reporting.",
+    icon: BarChart3,
+    title: "Analytics Dashboard",
+    description: "Comprehensive analytics and reporting for business insights",
   },
   {
-    icon: Globe,
-    title: "Global Scale",
-    description: "Built on AWS infrastructure supporting operations in 50+ countries with localized compliance and multi-currency support.",
+    icon: Shield,
+    title: "Secure & Reliable",
+    description: "Enterprise-grade security with role-based access control",
   },
   {
     icon: Clock,
-    title: "Historical Intelligence",
-    description: "Access 7+ years of data with advanced querying, trend analysis, and regulatory reporting tools at your fingertips.",
+    title: "24/7 Operations",
+    description: "Round-the-clock support for your logistics operations",
   },
 ];
 
@@ -70,11 +55,11 @@ const Features = () => {
           <h2 className="text-4xl md:text-5xl font-bold">
             Everything You Need for{" "}
             <span className="gradient-accent bg-clip-text text-transparent">
-              Modern Petroleum Logistics
+              Petroleum Logistics
             </span>
           </h2>
           <p className="text-xl text-muted-foreground">
-            Purpose-built for the complexities of petroleum distribution with enterprise-grade reliability
+            From order placement to delivery tracking, PetroFlow handles every aspect of your petroleum supply chain.
           </p>
         </div>
 

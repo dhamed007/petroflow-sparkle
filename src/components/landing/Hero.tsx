@@ -30,28 +30,26 @@ const Hero = () => {
 
             {/* Main Headline */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-              The Future of{" "}
+              Smart Logistics{" "}
               <span className="gradient-accent bg-clip-text text-transparent">
-                Petroleum Distribution
+                Management
               </span>
-              {" "}Management
             </h1>
 
             {/* Subheadline */}
             <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Streamline operations, optimize delivery routes, and maximize profitability with AI-powered insights. 
-              Built for enterprises managing complex petroleum logistics.
+              Streamline your petroleum supply chain with real-time tracking, automated logistics, and comprehensive fleet management.
             </p>
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
               <Button size="xl" variant="hero" onClick={() => window.location.href = '/auth'}>
-                Start Free 14-Day Trial
+                Get Started
                 <ArrowRight className="w-5 h-5" />
               </Button>
               <Button size="xl" variant="outline" className="group">
                 <Play className="w-5 h-5 mr-2 group-hover:scale-110 transition-smooth" />
-                Watch Demo
+                Learn More
               </Button>
             </div>
 

@@ -6,9 +6,12 @@ const Navigation = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border/50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <Activity className="w-6 h-6 text-accent" />
-            <span className="text-xl font-bold">PetroFlow</span>
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              <Activity className="w-6 h-6 text-accent" />
+              <span className="text-xl font-bold">PetroFlow</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground ml-8">Powered by Visionsedge Technologies</span>
           </div>
           
           <div className="hidden md:flex items-center gap-8">
