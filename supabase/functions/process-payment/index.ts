@@ -83,7 +83,7 @@ serve(async (req) => {
     }
 
     // Record transaction
-    await supabase.from("payment_transactions").insert({
+    const transactionData: any = {
       tenant_id: profile.tenant_id,
       gateway_type: paymentRequest.gateway_type,
       transaction_reference: paymentRequest.reference,
@@ -91,7 +91,23 @@ serve(async (req) => {
       currency: paymentRequest.currency,
       status: "pending",
       gateway_response: paymentResponse,
-    });
+    };
+
+    // Add subscription_id if this is a subscription payment
+    if (paymentRequest.metadata?.subscription_type === 'petroflow_saas') {
+      // Store metadata for later subscription creation
+      transactionData.gateway_response = {
+        ...paymentResponse,
+        subscription_metadata: paymentRequest.metadata
+      };
+    }
+
+    // Add invoice_id if provided
+    if (paymentRequest.metadata?.invoice_id) {
+      transactionData.invoice_id = paymentRequest.metadata.invoice_id;
+    }
+
+    await supabase.from("payment_transactions").insert(transactionData);
 
     return new Response(JSON.stringify(paymentResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

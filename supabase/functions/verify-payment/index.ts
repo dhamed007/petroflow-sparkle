@@ -65,6 +65,62 @@ serve(async (req) => {
         .eq("id", transaction.invoice_id);
     }
 
+    // If payment is for subscription, create or update subscription
+    if (status === "success" && transaction.gateway_response?.subscription_metadata) {
+      const metadata = transaction.gateway_response.subscription_metadata;
+      
+      // Calculate subscription period
+      const currentPeriodStart = new Date();
+      const currentPeriodEnd = new Date();
+      if (metadata.billing_cycle === 'monthly') {
+        currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+      } else {
+        currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+      }
+
+      // Check if subscription exists
+      const { data: existingSub } = await supabase
+        .from("tenant_subscriptions")
+        .select("id")
+        .eq("tenant_id", metadata.tenant_id)
+        .single();
+
+      if (existingSub) {
+        // Update existing subscription
+        await supabase
+          .from("tenant_subscriptions")
+          .update({
+            plan_id: metadata.plan_id,
+            status: "active",
+            billing_cycle: metadata.billing_cycle,
+            current_period_start: currentPeriodStart.toISOString(),
+            current_period_end: currentPeriodEnd.toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existingSub.id);
+      } else {
+        // Create new subscription
+        await supabase
+          .from("tenant_subscriptions")
+          .insert({
+            tenant_id: metadata.tenant_id,
+            plan_id: metadata.plan_id,
+            status: "active",
+            billing_cycle: metadata.billing_cycle,
+            current_period_start: currentPeriodStart.toISOString(),
+            current_period_end: currentPeriodEnd.toISOString()
+          });
+      }
+
+      // Link transaction to subscription
+      await supabase
+        .from("payment_transactions")
+        .update({
+          subscription_id: existingSub?.id || null
+        })
+        .eq("transaction_reference", reference);
+    }
+
     return new Response(JSON.stringify({ status, data: verificationResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

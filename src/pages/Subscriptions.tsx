@@ -23,7 +23,49 @@ const Subscriptions = () => {
       return;
     }
     fetchData();
+    
+    // Check for payment verification on redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const shouldVerify = urlParams.get('verify');
+    const reference = urlParams.get('reference');
+    
+    if (shouldVerify === 'true' && reference) {
+      verifyPayment(reference);
+    }
   }, [user, navigate]);
+
+  const verifyPayment = async (reference: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { reference, gateway_type: 'paystack' }
+      });
+
+      if (error) throw error;
+
+      if (data?.status === 'success') {
+        toast({ 
+          title: "Payment Successful!", 
+          description: "Your subscription has been activated" 
+        });
+        // Clear URL params and refresh data
+        window.history.replaceState({}, '', '/subscriptions');
+        fetchData();
+      } else {
+        toast({ 
+          title: "Payment Failed", 
+          description: "Please try again or contact support",
+          variant: "destructive" 
+        });
+      }
+    } catch (error: any) {
+      console.error('Payment verification error:', error);
+      toast({ 
+        title: "Verification Error", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -50,7 +92,92 @@ const Subscriptions = () => {
   };
 
   const handleSubscribe = async (planId: string, billingCycle: 'monthly' | 'annual') => {
-    toast({ title: "Payment integration coming soon", description: "Payment gateway will process this subscription" });
+    try {
+      // Get user's tenant and profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id, email')
+        .eq('id', user?.id)
+        .single();
+
+      if (!profile?.tenant_id) {
+        toast({ title: "Error", description: "No tenant found", variant: "destructive" });
+        return;
+      }
+
+      // Get the plan details
+      const plan = plans.find(p => p.id === planId);
+      if (!plan) {
+        toast({ title: "Error", description: "Plan not found", variant: "destructive" });
+        return;
+      }
+
+      // Check if Paystack is configured
+      const { data: gateway, error: gatewayError } = await supabase
+        .from('payment_gateways')
+        .select('*')
+        .eq('tenant_id', profile.tenant_id)
+        .eq('gateway_type', 'paystack')
+        .eq('is_active', true)
+        .single();
+
+      if (gatewayError || !gateway) {
+        toast({ 
+          title: "Payment Gateway Not Configured", 
+          description: "Please configure Paystack in Settings → Payment Settings",
+          variant: "destructive" 
+        });
+        navigate('/settings/payment');
+        return;
+      }
+
+      // Calculate amount based on billing cycle
+      const amount = billingCycle === 'monthly' ? plan.price_monthly : plan.price_annual;
+      
+      // Generate unique reference
+      const reference = `SUB-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ title: "Error", description: "Please login again", variant: "destructive" });
+        navigate('/auth');
+        return;
+      }
+
+      // Call payment processing function
+      const { data, error } = await supabase.functions.invoke('process-payment', {
+        body: {
+          amount,
+          currency: 'NGN',
+          email: profile.email,
+          reference,
+          gateway_type: 'paystack',
+          metadata: {
+            plan_id: planId,
+            billing_cycle: billingCycle,
+            tenant_id: profile.tenant_id,
+            subscription_type: 'petroflow_saas',
+            redirect_url: `${window.location.origin}/subscriptions?verify=true&reference=${reference}`
+          }
+        }
+      });
+
+      if (error) {
+        toast({ title: "Payment Error", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      // Redirect to Paystack payment page
+      if (data?.data?.authorization_url) {
+        window.location.href = data.data.authorization_url;
+      } else {
+        toast({ title: "Error", description: "Failed to initialize payment", variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error('Subscription error:', error);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
   const getTierIcon = (tier: string) => {
