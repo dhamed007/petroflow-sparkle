@@ -39,46 +39,30 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
-      // Create slug from name
-      const slug = tenantName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      // Get the user's JWT token for secure API call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No valid session found');
+      }
 
-      // Create tenant
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({
+      // Call the secure backend API endpoint using service role
+      const { data, error } = await supabase.functions.invoke('create-tenant', {
+        body: {
           name: tenantName,
-          slug: slug,
           industry: industry,
-          contact_email: user.email!,
-          plan: 'free'
-        })
-        .select()
-        .single();
+          contact_email: user.email || '',
+        },
+      });
 
-      if (tenantError) throw tenantError;
+      if (error) {
+        throw new Error(error.message || 'Failed to create organization');
+      }
 
-      // Update user profile with tenant_id
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ tenant_id: tenant.id })
-        .eq('id', user.id);
-
-      if (profileError) throw profileError;
-
-      // Assign tenant_admin role
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: user.id,
-          tenant_id: tenant.id,
-          role: 'tenant_admin'
-        });
-
-      if (roleError) throw roleError;
+      const { tenant_name } = data;
 
       toast({
         title: 'Tenant created successfully',
-        description: `Welcome to ${tenantName}!`
+        description: `Welcome to ${tenant_name}!`
       });
 
       navigate('/dashboard');
