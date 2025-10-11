@@ -162,6 +162,21 @@ export const ERPConnectForm = ({ onSuccess }: ERPConnectFormProps) => {
 
         <TabsContent value="quickbooks" className="space-y-4">
           <div>
+            <Label>Client ID</Label>
+            <Input
+              value={formData.credentials.client_id || ''}
+              onChange={(e) => updateCredentials('client_id', e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Client Secret</Label>
+            <Input
+              type="password"
+              value={formData.credentials.client_secret || ''}
+              onChange={(e) => updateCredentials('client_secret', e.target.value)}
+            />
+          </div>
+          <div>
             <Label>Realm ID</Label>
             <Input
               value={formData.credentials.realm_id || ''}
@@ -175,6 +190,15 @@ export const ERPConnectForm = ({ onSuccess }: ERPConnectFormProps) => {
               value={formData.credentials.access_token || ''}
               onChange={(e) => updateCredentials('access_token', e.target.value)}
               placeholder="Obtain from QuickBooks OAuth"
+            />
+          </div>
+          <div>
+            <Label>Refresh Token (Optional)</Label>
+            <Input
+              type="password"
+              value={formData.credentials.refresh_token || ''}
+              onChange={(e) => updateCredentials('refresh_token', e.target.value)}
+              placeholder="For automatic token renewal"
             />
           </div>
         </TabsContent>
@@ -199,12 +223,44 @@ export const ERPConnectForm = ({ onSuccess }: ERPConnectFormProps) => {
 
         <TabsContent value="dynamics365" className="space-y-4">
           <div>
+            <Label>Client ID</Label>
+            <Input
+              value={formData.credentials.client_id || ''}
+              onChange={(e) => updateCredentials('client_id', e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Client Secret</Label>
+            <Input
+              type="password"
+              value={formData.credentials.client_secret || ''}
+              onChange={(e) => updateCredentials('client_secret', e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Tenant ID</Label>
+            <Input
+              value={formData.credentials.tenant_id || ''}
+              onChange={(e) => updateCredentials('tenant_id', e.target.value)}
+              placeholder="Azure AD Tenant ID"
+            />
+          </div>
+          <div>
             <Label>Access Token</Label>
             <Input
               type="password"
               value={formData.credentials.access_token || ''}
               onChange={(e) => updateCredentials('access_token', e.target.value)}
               placeholder="Obtain from Azure AD"
+            />
+          </div>
+          <div>
+            <Label>Refresh Token (Optional)</Label>
+            <Input
+              type="password"
+              value={formData.credentials.refresh_token || ''}
+              onChange={(e) => updateCredentials('refresh_token', e.target.value)}
+              placeholder="For automatic token renewal"
             />
           </div>
         </TabsContent>
@@ -228,14 +284,33 @@ export const ERPConnectForm = ({ onSuccess }: ERPConnectFormProps) => {
           </div>
           
           {formData.credentials.auth_type === 'bearer' && (
-            <div>
-              <Label>Bearer Token</Label>
-              <Input
-                type="password"
-                value={formData.credentials.token || ''}
-                onChange={(e) => updateCredentials('token', e.target.value)}
-              />
-            </div>
+            <>
+              <div>
+                <Label>Bearer Token</Label>
+                <Input
+                  type="password"
+                  value={formData.credentials.token || ''}
+                  onChange={(e) => updateCredentials('token', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Refresh Token (Optional)</Label>
+                <Input
+                  type="password"
+                  value={formData.credentials.refresh_token || ''}
+                  onChange={(e) => updateCredentials('refresh_token', e.target.value)}
+                  placeholder="For automatic token renewal"
+                />
+              </div>
+              <div>
+                <Label>Token Refresh URL (Optional)</Label>
+                <Input
+                  value={formData.credentials.token_url || ''}
+                  onChange={(e) => updateCredentials('token_url', e.target.value)}
+                  placeholder="https://your-api.com/oauth/token"
+                />
+              </div>
+            </>
           )}
           
           {formData.credentials.auth_type === 'basic' && (

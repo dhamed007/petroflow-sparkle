@@ -21,5 +21,8 @@ verify_jwt = true
 [functions.erp-sync]
 verify_jwt = true
 
+[functions.erp-refresh-token]
+verify_jwt = true
+
 [functions.erp-webhook]
 verify_jwt = false

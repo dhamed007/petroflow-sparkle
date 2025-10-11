@@ -306,6 +306,7 @@ export type Database = {
       }
       erp_integrations: {
         Row: {
+          access_token_encrypted: string | null
           api_endpoint: string | null
           api_version: string | null
           auto_sync_enabled: boolean | null
@@ -320,13 +321,18 @@ export type Database = {
           last_test_at: string | null
           name: string
           next_sync_at: string | null
+          oauth_config: Json | null
+          refresh_token_encrypted: string | null
           sync_frequency_minutes: number | null
           tenant_id: string
           test_error_message: string | null
+          token_expires_at: string | null
+          token_type: string | null
           updated_at: string | null
           webhook_secret: string | null
         }
         Insert: {
+          access_token_encrypted?: string | null
           api_endpoint?: string | null
           api_version?: string | null
           auto_sync_enabled?: boolean | null
@@ -341,13 +347,18 @@ export type Database = {
           last_test_at?: string | null
           name: string
           next_sync_at?: string | null
+          oauth_config?: Json | null
+          refresh_token_encrypted?: string | null
           sync_frequency_minutes?: number | null
           tenant_id: string
           test_error_message?: string | null
+          token_expires_at?: string | null
+          token_type?: string | null
           updated_at?: string | null
           webhook_secret?: string | null
         }
         Update: {
+          access_token_encrypted?: string | null
           api_endpoint?: string | null
           api_version?: string | null
           auto_sync_enabled?: boolean | null
@@ -362,9 +373,13 @@ export type Database = {
           last_test_at?: string | null
           name?: string
           next_sync_at?: string | null
+          oauth_config?: Json | null
+          refresh_token_encrypted?: string | null
           sync_frequency_minutes?: number | null
           tenant_id?: string
           test_error_message?: string | null
+          token_expires_at?: string | null
+          token_type?: string | null
           updated_at?: string | null
           webhook_secret?: string | null
         }

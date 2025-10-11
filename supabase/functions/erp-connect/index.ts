@@ -86,6 +86,9 @@ serve(async (req) => {
       });
     }
 
+    // Extract token information if available
+    const tokenData = extractTokenData(connectRequest, connectionTest);
+
     // Save integration
     const { data: integration, error: integrationError } = await supabase
       .from("erp_integrations")
@@ -100,6 +103,12 @@ serve(async (req) => {
         connection_status: 'connected',
         last_test_at: new Date().toISOString(),
         is_active: true,
+        // Token management fields
+        access_token_encrypted: tokenData.access_token,
+        refresh_token_encrypted: tokenData.refresh_token,
+        token_expires_at: tokenData.expires_at,
+        token_type: tokenData.token_type,
+        oauth_config: tokenData.oauth_config,
       }, {
         onConflict: 'tenant_id,erp_system'
       })
@@ -329,4 +338,65 @@ async function testCustomAPIConnection(config: ERPConnectRequest) {
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+function extractTokenData(config: ERPConnectRequest, connectionTest: any) {
+  const result: any = {
+    access_token: null,
+    refresh_token: null,
+    expires_at: null,
+    token_type: 'Bearer',
+    oauth_config: {},
+  };
+
+  // Extract OAuth tokens based on ERP system
+  switch (config.erp_system) {
+    case 'quickbooks':
+      result.access_token = config.credentials.access_token;
+      result.refresh_token = config.credentials.refresh_token;
+      result.oauth_config = {
+        client_id: config.credentials.client_id,
+        client_secret: config.credentials.client_secret,
+        realm_id: config.credentials.realm_id,
+        token_url: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+      };
+      // QuickBooks tokens expire in 1 hour
+      if (result.access_token) {
+        result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
+      }
+      break;
+
+    case 'dynamics365':
+      result.access_token = config.credentials.access_token;
+      result.refresh_token = config.credentials.refresh_token;
+      result.oauth_config = {
+        client_id: config.credentials.client_id,
+        client_secret: config.credentials.client_secret,
+        tenant_id: config.credentials.tenant_id,
+        scope: config.credentials.scope || "https://org.crm.dynamics.com/.default",
+        token_url: `https://login.microsoftonline.com/${config.credentials.tenant_id}/oauth2/v2.0/token`,
+      };
+      // Microsoft tokens typically expire in 1 hour
+      if (result.access_token) {
+        result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
+      }
+      break;
+
+    case 'custom_api':
+      if (config.credentials.auth_type === 'bearer') {
+        result.access_token = config.credentials.token;
+        result.refresh_token = config.credentials.refresh_token;
+        result.oauth_config = {
+          client_id: config.credentials.client_id,
+          client_secret: config.credentials.client_secret,
+          token_url: config.credentials.token_url,
+        };
+        if (config.credentials.expires_in) {
+          result.expires_at = new Date(Date.now() + (config.credentials.expires_in * 1000)).toISOString();
+        }
+      }
+      break;
+  }
+
+  return result;
 }

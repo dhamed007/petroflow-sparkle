@@ -44,6 +44,15 @@ serve(async (req) => {
       throw new Error("Integration not found");
     }
 
+    // Check if token needs refresh
+    const tokenStatus = await checkAndRefreshToken(supabase, integration, authHeader);
+    if (!tokenStatus.valid) {
+      throw new Error(`Token validation failed: ${tokenStatus.error}`);
+    }
+
+    // Use refreshed integration data if token was refreshed
+    const activeIntegration = tokenStatus.refreshed_integration || integration;
+
     // Get entity configuration
     const { data: entity, error: entityError } = await supabase
       .from("erp_entities")
@@ -183,4 +192,66 @@ async function exportToERP(integration: any, entity: any, mappings: any[], supab
     failed: 0,
     message: "Export functionality ready - configure field mappings first"
   };
+}
+
+async function checkAndRefreshToken(supabase: any, integration: any, authHeader: string) {
+  // If no token expiry is set, assume it's valid (e.g., basic auth, API keys)
+  if (!integration.token_expires_at) {
+    return { valid: true };
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(integration.token_expires_at);
+  
+  // If token expires in less than 5 minutes, refresh it proactively
+  const bufferTime = 5 * 60 * 1000; // 5 minutes
+  if (now.getTime() + bufferTime >= expiresAt.getTime()) {
+    console.log(`Token expiring soon for integration ${integration.id}, refreshing...`);
+    
+    try {
+      // Call the refresh token function
+      const refreshResponse = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/erp-refresh-token`, {
+        method: "POST",
+        headers: {
+          "Authorization": authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integration_id: integration.id,
+        }),
+      });
+
+      const refreshData = await refreshResponse.json();
+      
+      if (!refreshData.success) {
+        return { 
+          valid: false, 
+          error: `Token refresh failed: ${refreshData.error}` 
+        };
+      }
+
+      // Fetch updated integration with new token
+      const { data: updatedIntegration } = await supabase
+        .from("erp_integrations")
+        .select("*")
+        .eq("id", integration.id)
+        .single();
+
+      console.log(`Token refreshed successfully for integration ${integration.id}`);
+
+      return { 
+        valid: true, 
+        refreshed: true,
+        refreshed_integration: updatedIntegration 
+      };
+    } catch (error: any) {
+      console.error("Token refresh error:", error);
+      return { 
+        valid: false, 
+        error: `Token refresh exception: ${error.message}` 
+      };
+    }
+  }
+
+  return { valid: true };
 }
