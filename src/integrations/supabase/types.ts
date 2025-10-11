@@ -392,6 +392,129 @@ export type Database = {
           },
         ]
       }
+      payment_gateways: {
+        Row: {
+          client_id: string | null
+          client_secret_encrypted: string | null
+          created_at: string | null
+          gateway_type: string
+          id: string
+          is_active: boolean | null
+          is_sandbox: boolean | null
+          public_key: string | null
+          secret_key_encrypted: string | null
+          tenant_id: string
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          client_secret_encrypted?: string | null
+          created_at?: string | null
+          gateway_type: string
+          id?: string
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          public_key?: string | null
+          secret_key_encrypted?: string | null
+          tenant_id: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          client_secret_encrypted?: string | null
+          created_at?: string | null
+          gateway_type?: string
+          id?: string
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          public_key?: string | null
+          secret_key_encrypted?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_gateways_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_transactions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          currency: string | null
+          gateway_response: Json | null
+          gateway_type: string
+          id: string
+          invoice_id: string | null
+          paid_at: string | null
+          status: string | null
+          subscription_id: string | null
+          tenant_id: string
+          transaction_reference: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          currency?: string | null
+          gateway_response?: Json | null
+          gateway_type: string
+          id?: string
+          invoice_id?: string | null
+          paid_at?: string | null
+          status?: string | null
+          subscription_id?: string | null
+          tenant_id: string
+          transaction_reference: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          currency?: string | null
+          gateway_response?: Json | null
+          gateway_type?: string
+          id?: string
+          invoice_id?: string | null
+          paid_at?: string | null
+          status?: string | null
+          subscription_id?: string | null
+          tenant_id?: string
+          transaction_reference?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -428,6 +551,108 @@ export type Database = {
             foreignKeyName: "profiles_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string | null
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          max_monthly_transactions: number
+          max_trucks: number
+          max_users: number
+          name: string
+          price_annual: number
+          price_monthly: number
+          tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_monthly_transactions?: number
+          max_trucks?: number
+          max_users?: number
+          name: string
+          price_annual: number
+          price_monthly: number
+          tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_monthly_transactions?: number
+          max_trucks?: number
+          max_users?: number
+          name?: string
+          price_annual?: number
+          price_monthly?: number
+          tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tenant_subscriptions: {
+        Row: {
+          billing_cycle: string
+          cancelled_at: string | null
+          created_at: string | null
+          current_period_end: string
+          current_period_start: string
+          id: string
+          plan_id: string
+          status: string
+          tenant_id: string
+          trial_ends_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          billing_cycle?: string
+          cancelled_at?: string | null
+          created_at?: string | null
+          current_period_end: string
+          current_period_start: string
+          id?: string
+          plan_id: string
+          status?: string
+          tenant_id: string
+          trial_ends_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          billing_cycle?: string
+          cancelled_at?: string | null
+          created_at?: string | null
+          current_period_end?: string
+          current_period_start?: string
+          id?: string
+          plan_id?: string
+          status?: string
+          tenant_id?: string
+          trial_ends_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_subscriptions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
@@ -486,6 +711,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      trucks: {
+        Row: {
+          capacity: number
+          capacity_unit: string | null
+          created_at: string | null
+          driver_id: string | null
+          gps_device_id: string | null
+          id: string
+          last_location: Json | null
+          plate_number: string
+          status: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          capacity: number
+          capacity_unit?: string | null
+          created_at?: string | null
+          driver_id?: string | null
+          gps_device_id?: string | null
+          id?: string
+          last_location?: Json | null
+          plate_number: string
+          status?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          capacity?: number
+          capacity_unit?: string | null
+          created_at?: string | null
+          driver_id?: string | null
+          gps_device_id?: string | null
+          id?: string
+          last_location?: Json | null
+          plate_number?: string
+          status?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trucks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -561,6 +836,7 @@ export type Database = {
         | "sales_rep"
       erp_system: "sap" | "oracle" | "odoo" | "dynamics" | "mock"
       subscription_plan: "free" | "pro" | "enterprise"
+      subscription_tier: "starter" | "business" | "enterprise"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -699,6 +975,7 @@ export const Constants = {
       ],
       erp_system: ["sap", "oracle", "odoo", "dynamics", "mock"],
       subscription_plan: ["free", "pro", "enterprise"],
+      subscription_tier: ["starter", "business", "enterprise"],
     },
   },
 } as const

@@ -13,6 +13,9 @@ import Deliveries from "./pages/Deliveries";
 import Inventory from "./pages/Inventory";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
+import PaymentSettings from "./pages/PaymentSettings";
+import Fleet from "./pages/Fleet";
+import Subscriptions from "./pages/Subscriptions";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -34,7 +37,10 @@ const App = () => (
             <Route path="/deliveries" element={<Deliveries />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/invoices" element={<Invoices />} />
+            <Route path="/fleet" element={<Fleet />} />
+            <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/payments" element={<PaymentSettings />} />
             <Route path="/admin" element={<Admin />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
