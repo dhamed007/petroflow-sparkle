@@ -524,6 +524,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_audit_log: {
+        Args: {
+          p_action: string
+          p_entity_id: string
+          p_entity_type: string
+          p_new_values?: Json
+          p_old_values?: Json
+        }
+        Returns: string
+      }
       get_user_tenant_id: {
         Args: { _user_id: string }
         Returns: string
@@ -547,6 +557,8 @@ export type Database = {
         | "dispatch_officer"
         | "driver"
         | "user"
+        | "sales_manager"
+        | "sales_rep"
       erp_system: "sap" | "oracle" | "odoo" | "dynamics" | "mock"
       subscription_plan: "free" | "pro" | "enterprise"
     }
@@ -682,6 +694,8 @@ export const Constants = {
         "dispatch_officer",
         "driver",
         "user",
+        "sales_manager",
+        "sales_rep",
       ],
       erp_system: ["sap", "oracle", "odoo", "dynamics", "mock"],
       subscription_plan: ["free", "pro", "enterprise"],

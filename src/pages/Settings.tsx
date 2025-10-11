@@ -68,6 +68,64 @@ const Settings = () => {
     }
   };
 
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a PNG, JPEG, or SVG image',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: 'File too large',
+        description: 'Maximum file size is 2MB',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${tenant.id}/logo.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('tenant-logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('tenant-logos')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('tenants')
+        .update({ logo_url: publicUrl })
+        .eq('id', tenant.id);
+
+      if (updateError) throw updateError;
+
+      toast({ title: 'Logo uploaded successfully' });
+      await fetchTenant();
+    } catch (error: any) {
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!tenant) return;
 
@@ -158,7 +216,19 @@ const Settings = () => {
                       className="w-20 h-20 object-contain border rounded"
                     />
                   )}
-                  <Button variant="outline" className="gap-2">
+                  <input
+                    type="file"
+                    id="logo-upload"
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    className="hidden"
+                    onChange={handleLogoUpload}
+                  />
+                  <Button 
+                    variant="outline" 
+                    className="gap-2"
+                    onClick={() => document.getElementById('logo-upload')?.click()}
+                    disabled={saving}
+                  >
                     <Upload className="w-4 h-4" />
                     Upload Logo
                   </Button>

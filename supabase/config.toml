@@ -1,1 +1,7 @@
 project_id = "rophutqdblgkasdooxtg"
+
+[functions.create-tenant]
+verify_jwt = true
+
+[functions.create-order]
+verify_jwt = true

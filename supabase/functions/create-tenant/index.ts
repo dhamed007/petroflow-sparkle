@@ -11,6 +11,36 @@ interface TenantData {
   contact_email: string;
 }
 
+const MAX_TENANT_NAME_LENGTH = 100;
+const MAX_INDUSTRY_LENGTH = 100;
+
+function validateTenantData(data: any): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!data.name || typeof data.name !== 'string') {
+    errors.push('name is required');
+  } else if (data.name.trim().length < 2 || data.name.trim().length > MAX_TENANT_NAME_LENGTH) {
+    errors.push(`name must be between 2 and ${MAX_TENANT_NAME_LENGTH} characters`);
+  }
+
+  if (!data.contact_email || typeof data.contact_email !== 'string') {
+    errors.push('contact_email is required');
+  } else {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.contact_email)) {
+      errors.push('contact_email must be a valid email address');
+    } else if (data.contact_email.length > 255) {
+      errors.push('contact_email must be less than 255 characters');
+    }
+  }
+
+  if (data.industry && (typeof data.industry !== 'string' || data.industry.length > MAX_INDUSTRY_LENGTH)) {
+    errors.push(`industry must be less than ${MAX_INDUSTRY_LENGTH} characters`);
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -50,17 +80,14 @@ Deno.serve(async (req) => {
 
     console.log('Authenticated user:', user.id);
 
-    // Parse the request body
-    const body: TenantData = await req.json();
-    
-    // Validate required fields
-    if (!body.name || !body.contact_email) {
-      console.error('Missing required fields:', body);
+    // Parse and validate request body
+    const body = await req.json();
+    const validation = validateTenantData(body);
+
+    if (!validation.valid) {
+      console.error('Validation failed:', validation.errors);
       return new Response(
-        JSON.stringify({ 
-          error: 'Bad Request', 
-          message: 'Missing required fields: name and contact_email are required' 
-        }),
+        JSON.stringify({ error: 'Validation failed', details: validation.errors }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -69,23 +96,43 @@ Deno.serve(async (req) => {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    console.log('Creating tenant with name:', body.name);
+    // Check if user already has a tenant
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (existingProfile?.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: 'User already belongs to a tenant' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const tenantData: TenantData = {
+      name: body.name.trim(),
+      contact_email: body.contact_email.trim().toLowerCase(),
+      industry: body.industry?.trim(),
+    };
+
+    console.log('Creating tenant with name:', tenantData.name);
 
     // Generate slug from tenant name
-    const slug = body.name
+    const slug = tenantData.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
+      .replace(/^-+|-+$/g, '')
       .substring(0, 50);
 
     // Insert the tenant using service role (bypasses RLS)
     const { data: tenant, error: insertError } = await supabaseAdmin
       .from('tenants')
       .insert({
-        name: body.name,
+        name: tenantData.name,
         slug: slug,
-        industry: body.industry || null,
-        contact_email: body.contact_email,
+        industry: tenantData.industry || null,
+        contact_email: tenantData.contact_email,
         is_active: true,
       })
       .select('id, name, slug')
