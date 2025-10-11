@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, Upload } from "lucide-react";
+import { Settings as SettingsIcon, Upload, Copy, Check } from "lucide-react";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -19,6 +19,7 @@ const Settings = () => {
   const [tenant, setTenant] = useState<any>(null);
   const [primaryColor, setPrimaryColor] = useState("#ea580c");
   const [secondaryColor, setSecondaryColor] = useState("#1e3a8a");
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -156,6 +157,15 @@ const Settings = () => {
     }
   };
 
+  const handleCopyCode = async () => {
+    if (tenant?.slug) {
+      await navigator.clipboard.writeText(tenant.slug);
+      setCopiedCode(true);
+      toast({ title: 'Organization code copied to clipboard' });
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -197,6 +207,35 @@ const Settings = () => {
               <div>
                 <Label>Plan</Label>
                 <Input value={tenant?.plan || 'free'} disabled className="capitalize" />
+              </div>
+              <div>
+                <Label>Organization Code</Label>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Share this code with team members to invite them to your organization
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted px-3 py-2 rounded border font-mono text-sm">
+                    {tenant?.slug || 'N/A'}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyCode}
+                    disabled={!tenant?.slug}
+                  >
+                    {copiedCode ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

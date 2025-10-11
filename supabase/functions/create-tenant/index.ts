@@ -119,11 +119,44 @@ Deno.serve(async (req) => {
     console.log('Creating tenant with name:', tenantData.name);
 
     // Generate slug from tenant name
-    const slug = tenantData.name
+    let baseSlug = tenantData.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .substring(0, 50);
+      .substring(0, 45); // Leave room for counter suffix
+
+    // Handle slug collisions by appending counter
+    let slug = baseSlug;
+    let counter = 1;
+    let slugExists = true;
+
+    while (slugExists && counter < 100) {
+      const { data: existingTenant } = await supabaseAdmin
+        .from('tenants')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (!existingTenant) {
+        slugExists = false;
+      } else {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
+    if (counter >= 100) {
+      console.error('Could not generate unique slug after 100 attempts');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Slug Generation Failed', 
+          message: 'Unable to generate a unique organization code. Please try a different name.' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Generated unique slug:', slug);
 
     // Insert the tenant using service role (bypasses RLS)
     const { data: tenant, error: insertError } = await supabaseAdmin

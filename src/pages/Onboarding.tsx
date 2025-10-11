@@ -9,7 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, Users } from 'lucide-react';
+import { Building2, Users, Copy, Check } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const industries = [
   'Oil & Gas Distribution',
@@ -25,6 +33,10 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showCodeDialog, setShowCodeDialog] = useState(false);
+  const [createdCode, setCreatedCode] = useState('');
+  const [createdName, setCreatedName] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Create tenant state
   const [tenantName, setTenantName] = useState('');
@@ -58,14 +70,12 @@ export default function Onboarding() {
         throw new Error(error.message || 'Failed to create organization');
       }
 
-      const { tenant_name } = data;
+      const { tenant_name, tenant_slug } = data;
 
-      toast({
-        title: 'Tenant created successfully',
-        description: `Welcome to ${tenant_name}!`
-      });
-
-      navigate('/dashboard');
+      // Show organization code dialog
+      setCreatedCode(tenant_slug);
+      setCreatedName(tenant_name);
+      setShowCodeDialog(true);
     } catch (error: any) {
       toast({
         title: 'Failed to create tenant',
@@ -130,8 +140,70 @@ export default function Onboarding() {
     }
   };
 
+  const handleCopyCode = async () => {
+    await navigator.clipboard.writeText(createdCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleContinue = () => {
+    setShowCodeDialog(false);
+    navigate('/dashboard');
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
+    <>
+      <AlertDialog open={showCodeDialog} onOpenChange={setShowCodeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Organization Created Successfully! 🎉</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>Welcome to <span className="font-semibold text-foreground">{createdName}</span>!</p>
+              
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium text-foreground">Your Organization Code:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-background px-3 py-2 rounded border text-foreground font-mono text-sm">
+                    {createdCode}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyCode}
+                    className="shrink-0"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-accent/50 p-3 rounded-lg">
+                <p className="text-sm">
+                  <strong>Important:</strong> Share this code with team members so they can join your organization. 
+                  You can also find this code later in your Settings.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button onClick={handleContinue} className="w-full">
+              Continue to Dashboard
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl mb-2">Welcome to PetroFlow</CardTitle>
@@ -229,6 +301,7 @@ export default function Onboarding() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }
