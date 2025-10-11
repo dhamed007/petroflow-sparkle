@@ -18,6 +18,7 @@ const Fleet = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [trucks, setTrucks] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTruck, setEditingTruck] = useState<any>(null);
@@ -29,6 +30,7 @@ const Fleet = () => {
     capacity_unit: 'liters',
     status: 'available',
     gps_device_id: '',
+    driver_id: '',
   });
 
   useEffect(() => {
@@ -37,13 +39,21 @@ const Fleet = () => {
       return;
     }
     fetchTrucks();
+    fetchDrivers();
   }, [user, navigate]);
 
   const fetchTrucks = async () => {
     try {
       const { data, error } = await supabase
         .from('trucks')
-        .select('*')
+        .select(`
+          *,
+          profiles:driver_id (
+            id,
+            full_name,
+            email
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -56,6 +66,41 @@ const Fleet = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDrivers = async () => {
+    try {
+      // Get current user's tenant
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (!profile?.tenant_id) return;
+
+      // Get all users with driver role in this tenant
+      const { data: driverRoles, error } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('tenant_id', profile.tenant_id)
+        .eq('role', 'driver');
+
+      if (error) throw error;
+
+      const driverIds = driverRoles?.map((r) => r.user_id) || [];
+
+      if (driverIds.length > 0) {
+        const { data: driversData } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', driverIds);
+
+        setDrivers(driversData || []);
+      }
+    } catch (error: any) {
+      console.error('Error loading drivers:', error);
     }
   };
 
@@ -77,6 +122,7 @@ const Fleet = () => {
       const truckData = {
         ...formData,
         capacity: parseFloat(formData.capacity),
+        driver_id: formData.driver_id || null,
         tenant_id: profile.tenant_id,
       };
 
@@ -99,13 +145,14 @@ const Fleet = () => {
 
       setDialogOpen(false);
       setEditingTruck(null);
-      setFormData({
-        plate_number: '',
-        capacity: '',
-        capacity_unit: 'liters',
-        status: 'available',
-        gps_device_id: '',
-      });
+                setFormData({
+                  plate_number: '',
+                  capacity: '',
+                  capacity_unit: 'liters',
+                  status: 'available',
+                  gps_device_id: '',
+                  driver_id: '',
+                });
       fetchTrucks();
     } catch (error: any) {
       toast({
@@ -124,6 +171,7 @@ const Fleet = () => {
       capacity_unit: truck.capacity_unit,
       status: truck.status,
       gps_device_id: truck.gps_device_id || '',
+      driver_id: truck.driver_id || '',
     });
     setDialogOpen(true);
   };
@@ -179,13 +227,14 @@ const Fleet = () => {
             <DialogTrigger asChild>
               <Button className="gap-2" onClick={() => {
                 setEditingTruck(null);
-                setFormData({
-                  plate_number: '',
-                  capacity: '',
-                  capacity_unit: 'liters',
-                  status: 'available',
-                  gps_device_id: '',
-                });
+      setFormData({
+        plate_number: '',
+        capacity: '',
+        capacity_unit: 'liters',
+        status: 'available',
+        gps_device_id: '',
+        driver_id: '',
+      });
               }}>
                 <Plus className="w-4 h-4" />
                 Add Truck
@@ -251,6 +300,25 @@ const Fleet = () => {
                     placeholder="Optional"
                   />
                 </div>
+                <div>
+                  <Label>Assign Driver (Optional)</Label>
+                  <Select 
+                    value={formData.driver_id} 
+                    onValueChange={(value) => setFormData({ ...formData, driver_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a driver..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No driver assigned</SelectItem>
+                      {drivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.full_name || driver.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button type="submit" className="w-full">
                   {editingTruck ? 'Update Truck' : 'Add Truck'}
                 </Button>
@@ -314,6 +382,11 @@ const Fleet = () => {
                     <p className="text-sm">
                       <span className="text-muted-foreground">Capacity:</span> {truck.capacity} {truck.capacity_unit}
                     </p>
+                    {truck.driver_id && truck.profiles && (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Driver:</span> {truck.profiles.full_name || truck.profiles.email}
+                      </p>
+                    )}
                     {truck.gps_device_id && (
                       <p className="text-sm">
                         <span className="text-muted-foreground">GPS ID:</span> {truck.gps_device_id}

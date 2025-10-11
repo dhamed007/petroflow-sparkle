@@ -11,6 +11,8 @@ import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 import DriverDashboard from "./pages/DriverDashboard";
 import ClientDashboard from "./pages/ClientDashboard";
+import UserManagement from "./pages/UserManagement";
+import Tracking from "./pages/Tracking";
 import Orders from "./pages/Orders";
 import Deliveries from "./pages/Deliveries";
 import Inventory from "./pages/Inventory";
@@ -44,9 +46,11 @@ const App = () => (
             <Route path="/inventory" element={<AuthGuard><Inventory /></AuthGuard>} />
             <Route path="/invoices" element={<AuthGuard><Invoices /></AuthGuard>} />
             <Route path="/fleet" element={<AuthGuard><Fleet /></AuthGuard>} />
+            <Route path="/tracking" element={<AuthGuard><Tracking /></AuthGuard>} />
             <Route path="/subscriptions" element={<AuthGuard><Subscriptions /></AuthGuard>} />
             <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
             <Route path="/settings/payments" element={<AuthGuard><PaymentSettings /></AuthGuard>} />
+            <Route path="/settings/users" element={<AuthGuard><UserManagement /></AuthGuard>} />
             <Route path="/integrations/erp" element={<AuthGuard><ERPIntegrations /></AuthGuard>} />
             <Route path="/admin" element={<AuthGuard><Admin /></AuthGuard>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
