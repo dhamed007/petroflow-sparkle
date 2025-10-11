@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardNav from '@/components/DashboardNav';
 import { Package, FileText, Truck, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ClientDashboard() {
   const { user } = useAuth();
   const { hasRole, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,33 +29,64 @@ export default function ClientDashboard() {
     const fetchClientData = async () => {
       if (!user) return;
 
-      // Fetch orders for this client
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          customers (name, phone),
-          deliveries (status, departure_time, arrival_time)
-        `)
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      try {
+        // Fetch orders for this client
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            customers (name, phone),
+            deliveries (status, departure_time, arrival_time)
+          `)
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-      // Fetch invoices for this client
-      const { data: invoicesData } = await supabase
-        .from('invoices')
-        .select('*')
-        .in('order_id', ordersData?.map(o => o.id) || [])
-        .order('created_at', { ascending: false });
+        if (ordersError) throw ordersError;
 
-      if (ordersData) setOrders(ordersData);
-      if (invoicesData) setInvoices(invoicesData);
-      
-      setLoading(false);
+        // Fetch invoices for this client
+        const { data: invoicesData, error: invoicesError } = await supabase
+          .from('invoices')
+          .select('*')
+          .in('order_id', ordersData?.map(o => o.id) || [])
+          .order('created_at', { ascending: false });
+
+        if (invoicesError) throw invoicesError;
+
+        setOrders(ordersData || []);
+        setInvoices(invoicesData || []);
+      } catch (error: any) {
+        toast({
+          title: 'Error loading data',
+          description: error.message,
+          variant: 'destructive'
+        });
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchClientData();
-  }, [user]);
+
+    // Real-time subscription
+    const ordersChannel = supabase
+      .channel('client-orders')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `created_by=eq.${user?.id}`
+        },
+        () => fetchClientData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ordersChannel);
+    };
+  }, [user, toast]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -65,14 +98,16 @@ export default function ClientDashboard() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-500';
-      case 'confirmed': return 'bg-blue-500';
-      case 'in_transit': return 'bg-purple-500';
-      case 'delivered': return 'bg-green-500';
-      case 'cancelled': return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 'pending': return 'outline';
+      case 'confirmed': return 'secondary';
+      case 'in_progress':
+      case 'in_transit': return 'secondary';
+      case 'delivered':
+      case 'completed': return 'default';
+      case 'cancelled': return 'destructive';
+      default: return 'outline';
     }
   };
 
@@ -184,8 +219,8 @@ export default function ClientDashboard() {
                           </p>
                         </div>
                       </div>
-                      <Badge className={getStatusColor(order.status)}>
-                        {order.status}
+                      <Badge variant={getStatusVariant(order.status)} className="capitalize">
+                        {order.status.replace('_', ' ')}
                       </Badge>
                     </div>
                   ))}
@@ -226,11 +261,12 @@ export default function ClientDashboard() {
                           {invoice.currency} {invoice.total_amount?.toLocaleString()}
                         </p>
                         <Badge 
-                          className={
-                            invoice.status === 'paid' ? 'bg-green-500' :
-                            invoice.status === 'pending' ? 'bg-yellow-500' : 
-                            'bg-gray-500'
+                          variant={
+                            invoice.status === 'paid' ? 'default' :
+                            invoice.status === 'pending' ? 'outline' : 
+                            'outline'
                           }
+                          className="capitalize"
                         >
                           {invoice.status}
                         </Badge>

@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardNav from '@/components/DashboardNav';
 import { Truck, MapPin, Package, CheckCircle, Clock } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DriverDashboard() {
   const { user } = useAuth();
   const { hasRole, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,59 +28,99 @@ export default function DriverDashboard() {
     const fetchDriverDeliveries = async () => {
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('deliveries')
-        .select(`
-          *,
-          orders (
-            order_number,
-            product_type,
-            quantity,
-            unit,
-            delivery_address,
-            customers (name, phone)
-          )
-        `)
-        .eq('driver_id', user.id)
-        .in('status', ['scheduled', 'in_transit'])
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('deliveries')
+          .select(`
+            *,
+            orders (
+              order_number,
+              product_type,
+              quantity,
+              unit,
+              delivery_address,
+              customers (name, phone)
+            )
+          `)
+          .eq('driver_id', user.id)
+          .in('status', ['scheduled', 'in_transit'])
+          .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        setDeliveries(data);
+        if (error) throw error;
+        setDeliveries(data || []);
+      } catch (error: any) {
+        toast({
+          title: 'Error loading deliveries',
+          description: error.message,
+          variant: 'destructive'
+        });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchDriverDeliveries();
-  }, [user]);
 
-  const getStatusColor = (status: string) => {
+    // Real-time subscription
+    const channel = supabase
+      .channel('driver-deliveries')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'deliveries',
+          filter: `driver_id=eq.${user?.id}`
+        },
+        () => fetchDriverDeliveries()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, toast]);
+
+  const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'scheduled': return 'bg-blue-500';
-      case 'in_transit': return 'bg-yellow-500';
-      case 'delivered': return 'bg-green-500';
-      default: return 'bg-gray-500';
+      case 'scheduled': return 'outline';
+      case 'in_transit': return 'secondary';
+      case 'delivered': return 'default';
+      default: return 'outline';
     }
   };
 
   const handleUpdateStatus = async (deliveryId: string, newStatus: string) => {
-    const updates: any = { status: newStatus };
-    
-    if (newStatus === 'in_transit') {
-      updates.departure_time = new Date().toISOString();
-    } else if (newStatus === 'delivered') {
-      updates.arrival_time = new Date().toISOString();
-    }
+    try {
+      const updates: any = { status: newStatus };
+      
+      if (newStatus === 'in_transit') {
+        updates.departure_time = new Date().toISOString();
+      } else if (newStatus === 'delivered') {
+        updates.arrival_time = new Date().toISOString();
+      }
 
-    const { error } = await supabase
-      .from('deliveries')
-      .update(updates)
-      .eq('id', deliveryId);
+      const { error } = await supabase
+        .from('deliveries')
+        .update(updates)
+        .eq('id', deliveryId);
 
-    if (!error) {
+      if (error) throw error;
+
       setDeliveries(prev => 
         prev.map(d => d.id === deliveryId ? { ...d, ...updates } : d)
       );
+
+      toast({
+        title: 'Status updated',
+        description: `Delivery marked as ${newStatus.replace('_', ' ')}`
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error updating status',
+        description: error.message,
+        variant: 'destructive'
+      });
     }
   };
 
@@ -158,7 +200,7 @@ export default function DriverDashboard() {
             ) : (
               <div className="space-y-4">
                 {deliveries.map((delivery) => (
-                  <Card key={delivery.id} className="border-l-4" style={{ borderLeftColor: `var(--${getStatusColor(delivery.status)})` }}>
+                  <Card key={delivery.id} className="hover:shadow-glow transition-smooth">
                     <CardContent className="pt-6">
                       <div className="flex items-start justify-between mb-4">
                         <div className="space-y-1">
@@ -166,13 +208,18 @@ export default function DriverDashboard() {
                             <h3 className="font-semibold">
                               {delivery.orders?.order_number || 'N/A'}
                             </h3>
-                            <Badge className={getStatusColor(delivery.status)}>
-                              {delivery.status}
+                            <Badge variant={getStatusVariant(delivery.status)} className="capitalize">
+                              {delivery.status.replace('_', ' ')}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {delivery.orders?.customers?.name || 'Unknown Customer'}
                           </p>
+                          {delivery.orders?.customers?.phone && (
+                            <p className="text-xs text-muted-foreground">
+                              {delivery.orders?.customers?.phone}
+                            </p>
+                          )}
                         </div>
                         <div className="text-right text-sm">
                           <p className="font-medium">
@@ -210,9 +257,9 @@ export default function DriverDashboard() {
                         <Button 
                           size="sm" 
                           variant="outline"
-                          onClick={() => navigate('/deliveries')}
+                          onClick={() => navigate('/tracking')}
                         >
-                          View Details
+                          View Map
                         </Button>
                       </div>
                     </CardContent>
