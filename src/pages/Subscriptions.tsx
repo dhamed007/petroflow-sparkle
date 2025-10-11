@@ -112,24 +112,8 @@ const Subscriptions = () => {
         return;
       }
 
-      // Check if Paystack is configured
-      const { data: gateway, error: gatewayError } = await supabase
-        .from('payment_gateways')
-        .select('*')
-        .eq('tenant_id', profile.tenant_id)
-        .eq('gateway_type', 'paystack')
-        .eq('is_active', true)
-        .single();
-
-      if (gatewayError || !gateway) {
-        toast({ 
-          title: "Payment Gateway Not Configured", 
-          description: "Please configure Paystack in Settings → Payment Settings",
-          variant: "destructive" 
-        });
-        navigate('/settings/payment');
-        return;
-      }
+      // Subscription payments go through VisionsEdge's Paystack (app-level)
+      // No need to check tenant's payment gateway configuration
 
       // Calculate amount based on billing cycle
       const amount = billingCycle === 'monthly' ? plan.price_monthly : plan.price_annual;
@@ -158,6 +142,7 @@ const Subscriptions = () => {
             billing_cycle: billingCycle,
             tenant_id: profile.tenant_id,
             subscription_type: 'petroflow_saas',
+            payment_level: 'app', // Indicates this is app-level payment (VisionsEdge)
             redirect_url: `${window.location.origin}/subscriptions?verify=true&reference=${reference}`
           }
         }

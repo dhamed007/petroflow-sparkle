@@ -21,7 +21,7 @@ serve(async (req) => {
     // Get transaction
     const { data: transaction, error: txError } = await supabase
       .from("payment_transactions")
-      .select("*, payment_gateways(*)")
+      .select("*")
       .eq("transaction_reference", reference)
       .single();
 
@@ -29,18 +29,45 @@ serve(async (req) => {
       throw new Error("Transaction not found");
     }
 
+    let gateway: any;
+
+    // Check if this is app-level payment (subscription)
+    if (transaction.gateway_response?.subscription_metadata?.payment_level === 'app') {
+      // Use VisionsEdge's Paystack configuration
+      gateway = {
+        gateway_type: 'paystack',
+        secret_key_encrypted: Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY"),
+        is_sandbox: false,
+      };
+    } else {
+      // Get tenant's payment gateway for customer payments
+      const { data: tenantGateway } = await supabase
+        .from("payment_gateways")
+        .select("*")
+        .eq("tenant_id", transaction.tenant_id)
+        .eq("gateway_type", gateway_type)
+        .eq("is_active", true)
+        .single();
+
+      if (!tenantGateway) {
+        throw new Error("Payment gateway not found");
+      }
+      
+      gateway = tenantGateway;
+    }
+
     let verificationResponse;
 
     // Verify payment based on gateway type
     switch (gateway_type) {
       case 'paystack':
-        verificationResponse = await verifyPaystack(transaction.payment_gateways, reference);
+        verificationResponse = await verifyPaystack(gateway, reference);
         break;
       case 'flutterwave':
-        verificationResponse = await verifyFlutterwave(transaction.payment_gateways, reference);
+        verificationResponse = await verifyFlutterwave(gateway, reference);
         break;
       case 'interswitch':
-        verificationResponse = await verifyInterswitch(transaction.payment_gateways, reference);
+        verificationResponse = await verifyInterswitch(gateway, reference);
         break;
       default:
         throw new Error("Invalid gateway type");
@@ -83,7 +110,7 @@ serve(async (req) => {
         .from("tenant_subscriptions")
         .select("id")
         .eq("tenant_id", metadata.tenant_id)
-        .single();
+        .maybeSingle();
 
       if (existingSub) {
         // Update existing subscription

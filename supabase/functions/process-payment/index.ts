@@ -52,17 +52,35 @@ serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
 
-    // Get payment gateway configuration
-    const { data: gateway, error: gatewayError } = await supabase
-      .from("payment_gateways")
-      .select("*")
-      .eq("tenant_id", profile.tenant_id)
-      .eq("gateway_type", paymentRequest.gateway_type)
-      .eq("is_active", true)
-      .single();
+    let gateway: any;
 
-    if (gatewayError || !gateway) {
-      throw new Error("Payment gateway not configured or inactive");
+    // Check if this is app-level payment (subscription) or tenant-level payment (customer)
+    if (paymentRequest.metadata?.payment_level === 'app') {
+      // Use VisionsEdge's Paystack configuration for subscriptions
+      gateway = {
+        gateway_type: 'paystack',
+        secret_key_encrypted: Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY"),
+        is_sandbox: false,
+      };
+      
+      if (!gateway.secret_key_encrypted) {
+        throw new Error("VisionsEdge Paystack configuration not found");
+      }
+    } else {
+      // Get tenant's payment gateway configuration for customer payments
+      const { data: tenantGateway, error: gatewayError } = await supabase
+        .from("payment_gateways")
+        .select("*")
+        .eq("tenant_id", profile.tenant_id)
+        .eq("gateway_type", paymentRequest.gateway_type)
+        .eq("is_active", true)
+        .single();
+
+      if (gatewayError || !tenantGateway) {
+        throw new Error("Payment gateway not configured or inactive");
+      }
+      
+      gateway = tenantGateway;
     }
 
     let paymentResponse;
