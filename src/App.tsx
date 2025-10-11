@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import PaymentSettings from "./pages/PaymentSettings";
 import Fleet from "./pages/Fleet";
 import Subscriptions from "./pages/Subscriptions";
+import ERPIntegrations from "./pages/ERPIntegrations";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/payments" element={<PaymentSettings />} />
+            <Route path="/integrations/erp" element={<ERPIntegrations />} />
             <Route path="/admin" element={<Admin />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

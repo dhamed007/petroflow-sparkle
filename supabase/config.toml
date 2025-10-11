@@ -11,3 +11,15 @@ verify_jwt = true
 
 [functions.verify-payment]
 verify_jwt = true
+
+[functions.erp-connect]
+verify_jwt = true
+
+[functions.erp-field-mapping-ai]
+verify_jwt = true
+
+[functions.erp-sync]
+verify_jwt = true
+
+[functions.erp-webhook]
+verify_jwt = false

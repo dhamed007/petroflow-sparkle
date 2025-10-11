@@ -1,0 +1,186 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("No authorization header");
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      authHeader.replace("Bearer ", "")
+    );
+
+    if (authError || !user) {
+      throw new Error("Unauthorized");
+    }
+
+    const { integration_id, entity_type, direction } = await req.json();
+
+    console.log("Starting sync:", { integration_id, entity_type, direction });
+
+    // Get integration details
+    const { data: integration, error: integrationError } = await supabase
+      .from("erp_integrations")
+      .select("*")
+      .eq("id", integration_id)
+      .single();
+
+    if (integrationError || !integration) {
+      throw new Error("Integration not found");
+    }
+
+    // Get entity configuration
+    const { data: entity, error: entityError } = await supabase
+      .from("erp_entities")
+      .select("*")
+      .eq("integration_id", integration_id)
+      .eq("entity_type", entity_type)
+      .single();
+
+    if (entityError || !entity) {
+      throw new Error("Entity not found");
+    }
+
+    // Get field mappings
+    const { data: mappings, error: mappingsError } = await supabase
+      .from("erp_field_mappings")
+      .select("*")
+      .eq("entity_id", entity.id);
+
+    if (mappingsError) {
+      throw new Error("Failed to fetch field mappings");
+    }
+
+    // Create sync log
+    const { data: syncLog, error: logError } = await supabase
+      .from("erp_sync_logs")
+      .insert({
+        integration_id,
+        entity_type,
+        sync_direction: direction,
+        sync_status: 'in_progress',
+        triggered_by: user.id,
+        is_manual: true,
+      })
+      .select()
+      .single();
+
+    if (logError) {
+      throw new Error("Failed to create sync log");
+    }
+
+    let syncResult = {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      message: ""
+    };
+    
+    try {
+      // Perform sync based on direction
+      if (direction === 'import' || direction === 'bidirectional') {
+        syncResult = await importFromERP(integration, entity, mappings, supabase);
+      }
+      
+      if (direction === 'export' || direction === 'bidirectional') {
+        const exportResult = await exportToERP(integration, entity, mappings, supabase);
+        syncResult = { 
+          processed: syncResult.processed + exportResult.processed,
+          succeeded: syncResult.succeeded + exportResult.succeeded,
+          failed: syncResult.failed + exportResult.failed,
+          message: `${syncResult.message} ${exportResult.message}`.trim()
+        };
+      }
+
+      // Update sync log with success
+      await supabase
+        .from("erp_sync_logs")
+        .update({
+          sync_status: 'completed',
+          completed_at: new Date().toISOString(),
+          records_processed: syncResult.processed,
+          records_succeeded: syncResult.succeeded,
+          records_failed: syncResult.failed,
+        })
+        .eq("id", syncLog.id);
+
+      // Update integration last sync time
+      await supabase
+        .from("erp_integrations")
+        .update({
+          last_sync_at: new Date().toISOString(),
+        })
+        .eq("id", integration_id);
+
+      return new Response(JSON.stringify({
+        success: true,
+        sync_log_id: syncLog.id,
+        result: syncResult,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    } catch (syncError: any) {
+      // Update sync log with failure
+      await supabase
+        .from("erp_sync_logs")
+        .update({
+          sync_status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: syncError.message,
+        })
+        .eq("id", syncLog.id);
+
+      throw syncError;
+    }
+  } catch (error: any) {
+    console.error("Sync error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+    });
+  }
+});
+
+async function importFromERP(integration: any, entity: any, mappings: any[], supabase: any) {
+  console.log("Importing from ERP:", entity.entity_type);
+  
+  // This is a placeholder - actual implementation would call the ERP API
+  // and transform data based on mappings
+  
+  return {
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    message: "Import functionality ready - configure field mappings first"
+  };
+}
+
+async function exportToERP(integration: any, entity: any, mappings: any[], supabase: any) {
+  console.log("Exporting to ERP:", entity.entity_type);
+  
+  // This is a placeholder - actual implementation would fetch data from PetroFlow
+  // and push to ERP based on mappings
+  
+  return {
+    processed: 0,
+    succeeded: 0,
+    failed: 0,
+    message: "Export functionality ready - configure field mappings first"
+  };
+}

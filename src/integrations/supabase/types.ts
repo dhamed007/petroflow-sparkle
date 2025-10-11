@@ -195,6 +195,254 @@ export type Database = {
           },
         ]
       }
+      erp_entities: {
+        Row: {
+          created_at: string | null
+          entity_type: Database["public"]["Enums"]["erp_entity_type"]
+          erp_endpoint: string | null
+          erp_entity_name: string | null
+          id: string
+          integration_id: string
+          is_enabled: boolean | null
+          sync_direction:
+            | Database["public"]["Enums"]["erp_sync_direction"]
+            | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_type: Database["public"]["Enums"]["erp_entity_type"]
+          erp_endpoint?: string | null
+          erp_entity_name?: string | null
+          id?: string
+          integration_id: string
+          is_enabled?: boolean | null
+          sync_direction?:
+            | Database["public"]["Enums"]["erp_sync_direction"]
+            | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_type?: Database["public"]["Enums"]["erp_entity_type"]
+          erp_endpoint?: string | null
+          erp_entity_name?: string | null
+          id?: string
+          integration_id?: string
+          is_enabled?: boolean | null
+          sync_direction?:
+            | Database["public"]["Enums"]["erp_sync_direction"]
+            | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erp_entities_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "erp_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      erp_field_mappings: {
+        Row: {
+          ai_confidence_score: number | null
+          ai_suggested: boolean | null
+          created_at: string | null
+          default_value: string | null
+          entity_id: string
+          erp_field: string
+          erp_field_type: string | null
+          id: string
+          is_required: boolean | null
+          manually_verified: boolean | null
+          petroflow_field: string
+          petroflow_field_type: string | null
+          transform_function: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          ai_suggested?: boolean | null
+          created_at?: string | null
+          default_value?: string | null
+          entity_id: string
+          erp_field: string
+          erp_field_type?: string | null
+          id?: string
+          is_required?: boolean | null
+          manually_verified?: boolean | null
+          petroflow_field: string
+          petroflow_field_type?: string | null
+          transform_function?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          ai_suggested?: boolean | null
+          created_at?: string | null
+          default_value?: string | null
+          entity_id?: string
+          erp_field?: string
+          erp_field_type?: string | null
+          id?: string
+          is_required?: boolean | null
+          manually_verified?: boolean | null
+          petroflow_field?: string
+          petroflow_field_type?: string | null
+          transform_function?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erp_field_mappings_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "erp_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      erp_integrations: {
+        Row: {
+          api_endpoint: string | null
+          api_version: string | null
+          auto_sync_enabled: boolean | null
+          connection_status: string | null
+          created_at: string | null
+          credentials_encrypted: Json
+          erp_system: Database["public"]["Enums"]["erp_system_type"]
+          id: string
+          is_active: boolean | null
+          is_sandbox: boolean | null
+          last_sync_at: string | null
+          last_test_at: string | null
+          name: string
+          next_sync_at: string | null
+          sync_frequency_minutes: number | null
+          tenant_id: string
+          test_error_message: string | null
+          updated_at: string | null
+          webhook_secret: string | null
+        }
+        Insert: {
+          api_endpoint?: string | null
+          api_version?: string | null
+          auto_sync_enabled?: boolean | null
+          connection_status?: string | null
+          created_at?: string | null
+          credentials_encrypted?: Json
+          erp_system: Database["public"]["Enums"]["erp_system_type"]
+          id?: string
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          last_sync_at?: string | null
+          last_test_at?: string | null
+          name: string
+          next_sync_at?: string | null
+          sync_frequency_minutes?: number | null
+          tenant_id: string
+          test_error_message?: string | null
+          updated_at?: string | null
+          webhook_secret?: string | null
+        }
+        Update: {
+          api_endpoint?: string | null
+          api_version?: string | null
+          auto_sync_enabled?: boolean | null
+          connection_status?: string | null
+          created_at?: string | null
+          credentials_encrypted?: Json
+          erp_system?: Database["public"]["Enums"]["erp_system_type"]
+          id?: string
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          last_sync_at?: string | null
+          last_test_at?: string | null
+          name?: string
+          next_sync_at?: string | null
+          sync_frequency_minutes?: number | null
+          tenant_id?: string
+          test_error_message?: string | null
+          updated_at?: string | null
+          webhook_secret?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erp_integrations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      erp_sync_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          entity_type: Database["public"]["Enums"]["erp_entity_type"]
+          error_details: Json | null
+          error_message: string | null
+          id: string
+          integration_id: string
+          is_manual: boolean | null
+          records_failed: number | null
+          records_processed: number | null
+          records_succeeded: number | null
+          started_at: string | null
+          sync_direction: Database["public"]["Enums"]["erp_sync_direction"]
+          sync_metadata: Json | null
+          sync_status: Database["public"]["Enums"]["erp_sync_status"]
+          triggered_by: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          entity_type: Database["public"]["Enums"]["erp_entity_type"]
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          integration_id: string
+          is_manual?: boolean | null
+          records_failed?: number | null
+          records_processed?: number | null
+          records_succeeded?: number | null
+          started_at?: string | null
+          sync_direction: Database["public"]["Enums"]["erp_sync_direction"]
+          sync_metadata?: Json | null
+          sync_status?: Database["public"]["Enums"]["erp_sync_status"]
+          triggered_by?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          entity_type?: Database["public"]["Enums"]["erp_entity_type"]
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          integration_id?: string
+          is_manual?: boolean | null
+          records_failed?: number | null
+          records_processed?: number | null
+          records_succeeded?: number | null
+          started_at?: string | null
+          sync_direction?: Database["public"]["Enums"]["erp_sync_direction"]
+          sync_metadata?: Json | null
+          sync_status?: Database["public"]["Enums"]["erp_sync_status"]
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "erp_sync_logs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "erp_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory: {
         Row: {
           created_at: string
@@ -834,7 +1082,28 @@ export type Database = {
         | "user"
         | "sales_manager"
         | "sales_rep"
+      erp_entity_type:
+        | "orders"
+        | "customers"
+        | "products"
+        | "invoices"
+        | "payments"
+        | "inventory"
+      erp_sync_direction: "import" | "export" | "bidirectional"
+      erp_sync_status:
+        | "pending"
+        | "in_progress"
+        | "completed"
+        | "failed"
+        | "cancelled"
       erp_system: "sap" | "oracle" | "odoo" | "dynamics" | "mock"
+      erp_system_type:
+        | "sap"
+        | "odoo"
+        | "quickbooks"
+        | "sage"
+        | "dynamics365"
+        | "custom_api"
       subscription_plan: "free" | "pro" | "enterprise"
       subscription_tier: "starter" | "business" | "enterprise"
     }
@@ -973,7 +1242,31 @@ export const Constants = {
         "sales_manager",
         "sales_rep",
       ],
+      erp_entity_type: [
+        "orders",
+        "customers",
+        "products",
+        "invoices",
+        "payments",
+        "inventory",
+      ],
+      erp_sync_direction: ["import", "export", "bidirectional"],
+      erp_sync_status: [
+        "pending",
+        "in_progress",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
       erp_system: ["sap", "oracle", "odoo", "dynamics", "mock"],
+      erp_system_type: [
+        "sap",
+        "odoo",
+        "quickbooks",
+        "sage",
+        "dynamics365",
+        "custom_api",
+      ],
       subscription_plan: ["free", "pro", "enterprise"],
       subscription_tier: ["starter", "business", "enterprise"],
     },
