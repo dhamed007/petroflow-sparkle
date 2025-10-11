@@ -3,17 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import DashboardNav from "@/components/DashboardNav";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Package } from "lucide-react";
+import { Plus, Package, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { OrderDialog } from "@/components/orders/OrderDialog";
+import { OrderCard } from "@/components/orders/OrderCard";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const Orders = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     if (!user) {
@@ -24,13 +35,16 @@ const Orders = () => {
     fetchOrders();
   }, [user, navigate]);
 
+  useEffect(() => {
+    filterOrders();
+  }, [orders, searchTerm, statusFilter]);
+
   const fetchOrders = async () => {
     try {
       const { data, error } = await supabase
         .from('orders')
         .select('*, customers(name)')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setOrders(data || []);
@@ -45,6 +59,62 @@ const Orders = () => {
     }
   };
 
+  const filterOrders = () => {
+    let filtered = [...orders];
+    
+    if (searchTerm) {
+      filtered = filtered.filter(order => 
+        order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.product_type.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(order => order.status === statusFilter);
+    }
+    
+    setFilteredOrders(filtered);
+  };
+
+  const handleCreateOrder = () => {
+    setEditingOrder(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditOrder = (order: any) => {
+    setEditingOrder(order);
+    setDialogOpen(true);
+  };
+
+  const handleDeleteClick = (orderId: string) => {
+    setDeleteDialog({ open: true, orderId });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteDialog.orderId) return;
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', deleteDialog.orderId);
+
+      if (error) throw error;
+
+      toast({ title: 'Order deleted successfully' });
+      fetchOrders();
+    } catch (error: any) {
+      toast({
+        title: 'Error deleting order',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleteDialog({ open: false, orderId: null });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardNav />
@@ -55,54 +125,90 @@ const Orders = () => {
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">Manage customer orders</p>
           </div>
-          <Button className="gap-2">
+          <Button className="gap-2" onClick={handleCreateOrder}>
             <Plus className="w-4 h-4" />
             New Order
           </Button>
         </div>
 
+        <div className="flex gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search orders, customers, or products..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {loading ? (
           <div className="text-center py-12">Loading orders...</div>
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No orders yet</p>
+              <p className="text-muted-foreground">
+                {orders.length === 0 ? 'No orders yet. Create your first order!' : 'No orders match your filters'}
+              </p>
+              {orders.length === 0 && (
+                <Button className="mt-4" onClick={handleCreateOrder}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create First Order
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4">
-            {orders.map((order) => (
-              <Card key={order.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{order.order_number}</span>
-                    <span className="text-sm font-normal text-muted-foreground capitalize">
-                      {order.status}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Customer</p>
-                      <p className="font-medium">{order.customers?.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Product</p>
-                      <p className="font-medium">{order.product_type}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Quantity</p>
-                      <p className="font-medium">{order.quantity} {order.unit}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            {filteredOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                onEdit={() => handleEditOrder(order)}
+                onDelete={() => handleDeleteClick(order.id)}
+              />
             ))}
           </div>
         )}
       </div>
+
+      <OrderDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSuccess={fetchOrders}
+        order={editingOrder}
+      />
+
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this order? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

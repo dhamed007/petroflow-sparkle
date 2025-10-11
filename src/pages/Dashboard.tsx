@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import DashboardNav from '@/components/DashboardNav';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Activity, LogOut, Building2 } from 'lucide-react';
+import { Package, Truck, Archive, FileText, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -16,9 +16,17 @@ interface Tenant {
 }
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    pendingOrders: 0,
+    activeDeliveries: 0,
+    lowStockItems: 0,
+    pendingInvoices: 0,
+    recentOrders: [] as any[],
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,7 +56,6 @@ export default function Dashboard() {
 
   const fetchTenantData = async () => {
     try {
-      // Get user's profile with tenant info
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('tenant_id')
@@ -61,18 +68,24 @@ export default function Dashboard() {
       }
 
       if (profile?.tenant_id) {
-        // Fetch tenant details
-        const { data: tenantData, error: tenantError } = await supabase
-          .from('tenants')
-          .select('*')
-          .eq('id', profile.tenant_id)
-          .single();
+        const [tenantData, ordersData, deliveriesData, inventoryData, invoicesData] = await Promise.all([
+          supabase.from('tenants').select('*').eq('id', profile.tenant_id).single(),
+          supabase.from('orders').select('*, customers(name)').order('created_at', { ascending: false }),
+          supabase.from('deliveries').select('*'),
+          supabase.from('inventory').select('*'),
+          supabase.from('invoices').select('*'),
+        ]);
 
-        if (tenantError) {
-          console.error('Error fetching tenant:', tenantError);
-        } else {
-          setTenant(tenantData);
-        }
+        if (tenantData.data) setTenant(tenantData.data);
+
+        setStats({
+          totalOrders: ordersData.data?.length || 0,
+          pendingOrders: ordersData.data?.filter(o => o.status === 'pending').length || 0,
+          activeDeliveries: deliveriesData.data?.filter(d => ['scheduled', 'in_transit'].includes(d.status)).length || 0,
+          lowStockItems: inventoryData.data?.filter(i => i.min_threshold && i.quantity <= i.min_threshold).length || 0,
+          pendingInvoices: invoicesData.data?.filter(i => i.status === 'pending').length || 0,
+          recentOrders: ordersData.data?.slice(0, 5) || [],
+        });
       }
     } catch (error) {
       console.error('Error in fetchTenantData:', error);
@@ -81,17 +94,30 @@ export default function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/auth');
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Activity className="w-12 h-12 text-accent animate-pulse mx-auto" />
-          <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen bg-background">
+        <DashboardNav />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-12">Loading dashboard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tenant) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardNav />
+        <div className="container mx-auto px-4 py-8">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <h3 className="font-semibold mb-2">No Organization Assigned</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Your account is not yet associated with an organization. Contact your administrator to get access.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -99,107 +125,135 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Activity className="w-8 h-8 text-accent" />
-            <div>
-              <h1 className="text-xl font-bold">PetroFlow</h1>
-              {tenant && (
-                <p className="text-sm text-muted-foreground">{tenant.name}</p>
-              )}
-            </div>
-          </div>
-          
-          <Button variant="ghost" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
+      <DashboardNav />
+      
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6">
-          {/* Welcome Card */}
-          <Card className="shadow-elevated">
-            <CardHeader>
-              <CardTitle>Welcome back!</CardTitle>
-              <CardDescription>
-                {user?.email}
-              </CardDescription>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">{tenant.name}</p>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Card className="hover:shadow-glow transition-smooth">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              {tenant ? (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <Building2 className="w-6 h-6 text-accent mt-1" />
-                    <div>
-                      <h3 className="font-semibold">{tenant.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Industry: {tenant.industry || 'Not specified'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Plan: {tenant.plan}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 space-y-4">
-                  <Building2 className="w-12 h-12 text-muted-foreground mx-auto" />
-                  <div>
-                    <h3 className="font-semibold mb-2">No Company Assigned</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Your account is not yet associated with a company. Contact your administrator to get access.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="text-2xl font-bold">{stats.totalOrders}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.pendingOrders} pending
+              </p>
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          {tenant && (
-            <div className="grid md:grid-cols-3 gap-4">
-              <Card className="hover:shadow-glow transition-smooth">
-                <CardHeader>
-                  <CardTitle className="text-lg">Orders</CardTitle>
-                  <CardDescription>Manage petroleum orders</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="secondary">
-                    View Orders
-                  </Button>
-                </CardContent>
-              </Card>
+          <Card className="hover:shadow-glow transition-smooth">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Deliveries</CardTitle>
+              <Truck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.activeDeliveries}</div>
+              <p className="text-xs text-muted-foreground">
+                In transit or scheduled
+              </p>
+            </CardContent>
+          </Card>
 
-              <Card className="hover:shadow-glow transition-smooth">
-                <CardHeader>
-                  <CardTitle className="text-lg">Deliveries</CardTitle>
-                  <CardDescription>Track delivery status</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="secondary">
-                    View Deliveries
-                  </Button>
-                </CardContent>
-              </Card>
+          <Card className="hover:shadow-glow transition-smooth">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Low Stock Alerts</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.lowStockItems}</div>
+              <p className="text-xs text-muted-foreground">
+                Items need restocking
+              </p>
+            </CardContent>
+          </Card>
 
-              <Card className="hover:shadow-glow transition-smooth">
-                <CardHeader>
-                  <CardTitle className="text-lg">Inventory</CardTitle>
-                  <CardDescription>Monitor stock levels</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button className="w-full" variant="secondary">
-                    View Inventory
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          <Card className="hover:shadow-glow transition-smooth">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pendingInvoices}</div>
+              <p className="text-xs text-muted-foreground">
+                Awaiting payment
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Orders */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Recent Orders</span>
+              <TrendingUp className="w-5 h-5 text-muted-foreground" />
+            </CardTitle>
+            <CardDescription>Latest orders from your customers</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {stats.recentOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">No orders yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {stats.recentOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/5 transition-smooth">
+                    <div className="flex-1">
+                      <p className="font-medium">{order.order_number}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.customers?.name} • {order.product_type} • {order.quantity} {order.unit}
+                      </p>
+                    </div>
+                    <span className="text-sm px-3 py-1 rounded-full bg-secondary text-secondary-foreground capitalize">
+                      {order.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid md:grid-cols-3 gap-4 mt-6">
+          <Card className="hover:shadow-glow transition-smooth cursor-pointer" onClick={() => navigate('/orders')}>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="w-5 h-5 text-accent" />
+                Orders
+              </CardTitle>
+              <CardDescription>Create and manage orders</CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="hover:shadow-glow transition-smooth cursor-pointer" onClick={() => navigate('/deliveries')}>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Truck className="w-5 h-5 text-accent" />
+                Deliveries
+              </CardTitle>
+              <CardDescription>Track delivery status</CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="hover:shadow-glow transition-smooth cursor-pointer" onClick={() => navigate('/inventory')}>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Archive className="w-5 h-5 text-accent" />
+                Inventory
+              </CardTitle>
+              <CardDescription>Monitor stock levels</CardDescription>
+            </CardHeader>
+          </Card>
         </div>
       </main>
     </div>
