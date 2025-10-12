@@ -44,6 +44,7 @@ export default function Onboarding() {
 
   // Join tenant state
   const [tenantSlug, setTenantSlug] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'client' | 'driver' | 'dispatch_officer'>('client');
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,13 +120,13 @@ export default function Onboarding() {
 
       if (profileError) throw profileError;
 
-      // Assign client role by default when joining
+      // Assign selected role when joining
       const { error: roleError } = await supabase
         .from('user_roles')
         .insert({
           user_id: user.id,
           tenant_id: tenant.id,
-          role: 'client'
+          role: selectedRole
         });
 
       if (roleError) throw roleError;
@@ -289,6 +290,23 @@ export default function Onboarding() {
                   />
                   <p className="text-sm text-muted-foreground">
                     Enter the organization code provided by your administrator
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="role">Your Role</Label>
+                  <Select value={selectedRole} onValueChange={(value: any) => setSelectedRole(value)} required>
+                    <SelectTrigger id="role">
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Client - Place and track orders</SelectItem>
+                      <SelectItem value="driver">Driver - Deliver orders</SelectItem>
+                      <SelectItem value="dispatch_officer">Staff - Manage operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    Select the role that best describes your position
                   </p>
                 </div>
 
