@@ -11,7 +11,7 @@ const LiveDashboard = () => {
           </div>
           <h2 className="text-4xl md:text-5xl font-bold">
             Real-time Visibility{" "}
-            <span className="gradient-accent bg-clip-text text-transparent">
+            <span className="text-accent">
               Into Your Operations
             </span>
           </h2>
