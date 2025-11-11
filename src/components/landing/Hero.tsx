@@ -31,7 +31,7 @@ const Hero = () => {
             {/* Main Headline */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
               Smart Logistics{" "}
-              <span className="gradient-accent bg-clip-text text-transparent">
+              <span className="text-accent">
                 Management
               </span>
             </h1>
