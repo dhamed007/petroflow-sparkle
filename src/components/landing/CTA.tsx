@@ -31,13 +31,13 @@ const CTA = () => {
             <Button 
               size="xl" 
               variant="outline" 
-              className="text-foreground hover:text-foreground border-foreground/50 hover:border-accent bg-background/20 hover:bg-background/30"
+              className="text-white hover:text-white border-white/70 hover:border-white bg-transparent hover:bg-white/10"
             >
               Schedule Demo
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 pt-8 text-sm text-foreground/80">
+          <div className="flex flex-wrap items-center justify-center gap-6 pt-8 text-sm text-white/90">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-accent" />
               <span>14-day free trial</span>
