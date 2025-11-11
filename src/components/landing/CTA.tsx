@@ -12,14 +12,14 @@ const CTA = () => {
             Get Started Today
           </div>
           
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground">
             Ready to Transform Your{" "}
             <span className="text-accent">
               Logistics Operations?
             </span>
           </h2>
           
-          <p className="text-xl text-foreground/80 max-w-2xl mx-auto">
+          <p className="text-xl text-foreground/90 max-w-2xl mx-auto">
             Join leading petroleum companies who trust PetroFlow for their supply chain management.
           </p>
 
@@ -31,13 +31,13 @@ const CTA = () => {
             <Button 
               size="xl" 
               variant="outline" 
-              className="text-foreground hover:text-accent border-foreground/30 hover:border-accent bg-background/10 backdrop-blur-sm hover:bg-background/20"
+              className="text-foreground hover:text-foreground border-foreground/50 hover:border-accent bg-background/20 hover:bg-background/30"
             >
               Schedule Demo
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 pt-8 text-sm text-foreground/70">
+          <div className="flex flex-wrap items-center justify-center gap-6 pt-8 text-sm text-foreground/80">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-accent" />
               <span>14-day free trial</span>
