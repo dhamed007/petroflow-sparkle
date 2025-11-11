@@ -54,7 +54,7 @@ const Features = () => {
           </div>
           <h2 className="text-4xl md:text-5xl font-bold">
             Everything You Need for{" "}
-            <span className="gradient-accent bg-clip-text text-transparent">
+            <span className="text-accent">
               Petroleum Logistics
             </span>
           </h2>

@@ -14,7 +14,7 @@ const CTA = () => {
           
           <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold">
             Ready to Transform Your{" "}
-            <span className="gradient-accent bg-clip-text text-transparent">
+            <span className="text-accent">
               Logistics Operations?
             </span>
           </h2>

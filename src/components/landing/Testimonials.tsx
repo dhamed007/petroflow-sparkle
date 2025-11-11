@@ -32,7 +32,7 @@ const Testimonials = () => {
           </div>
           <h2 className="text-4xl md:text-5xl font-bold">
             Trusted by Industry{" "}
-            <span className="gradient-accent bg-clip-text text-transparent">
+            <span className="text-accent">
               Leaders
             </span>
           </h2>

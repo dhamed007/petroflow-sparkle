@@ -33,7 +33,7 @@ const Solutions = () => {
           </div>
           <h2 className="text-4xl md:text-5xl font-bold">
             Choose Your{" "}
-            <span className="gradient-accent bg-clip-text text-transparent">
+            <span className="text-accent">
               Access Portal
             </span>
           </h2>
