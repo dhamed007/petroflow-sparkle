@@ -25,6 +25,7 @@ import ERPIntegrations from "./pages/ERPIntegrations";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import Analytics from "./pages/Analytics";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/integrations/erp" element={<AuthGuard><ERPIntegrations /></AuthGuard>} />
             <Route path="/admin" element={<AuthGuard><Admin /></AuthGuard>} />
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
+            <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
