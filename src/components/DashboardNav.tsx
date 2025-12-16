@@ -1,9 +1,19 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Package, Truck, Archive, FileText, Settings, LogOut, Menu, Building2, Shield, CreditCard, Users, Link, Activity, MapPin } from "lucide-react";
+import { Package, Truck, Archive, FileText, Settings, Shield, CreditCard, Users, Link, Activity, MapPin, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationsDropdown } from "@/components/notifications/NotificationsDropdown";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface NavItem {
   label: string;
@@ -17,22 +27,27 @@ const DashboardNav = () => {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; email: string } | null>(null);
 
   useEffect(() => {
-    const fetchUserRoles = async () => {
+    const fetchUserData = async () => {
       if (!user) return;
       
-      const { data, error } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
+      const [rolesResult, profileResult] = await Promise.all([
+        supabase.from('user_roles').select('role').eq('user_id', user.id),
+        supabase.from('profiles').select('full_name, avatar_url, email').eq('id', user.id).single()
+      ]);
       
-      if (!error && data) {
-        setUserRoles(data.map((r) => r.role));
+      if (!rolesResult.error && rolesResult.data) {
+        setUserRoles(rolesResult.data.map((r) => r.role));
+      }
+      
+      if (!profileResult.error && profileResult.data) {
+        setProfile(profileResult.data);
       }
     };
 
-    fetchUserRoles();
+    fetchUserData();
   }, [user]);
 
   const navItems: NavItem[] = [
@@ -55,16 +70,23 @@ const DashboardNav = () => {
     return userRoles.includes(item.requiredRole);
   });
 
+  const getInitials = (name: string | null, email: string) => {
+    if (name) {
+      return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return email.substring(0, 2).toUpperCase();
+  };
+
   return (
     <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
             <Activity className="w-6 h-6 text-accent" />
             <span className="text-xl font-bold">PetroFlow</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {filteredNavItems.map((item) => (
               <Button
                 key={item.path}
@@ -74,12 +96,43 @@ const DashboardNav = () => {
                 className="gap-2"
               >
                 {item.icon}
-                <span className="hidden md:inline">{item.label}</span>
+                <span className="hidden lg:inline">{item.label}</span>
               </Button>
             ))}
-            <Button variant="ghost" size="sm" onClick={signOut}>
-              Sign Out
-            </Button>
+            
+            {/* Notifications */}
+            <NotificationsDropdown />
+            
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 ml-2">
+                  <Avatar className="w-6 h-6">
+                    <AvatarImage src={profile?.avatar_url || undefined} />
+                    <AvatarFallback className="text-xs">
+                      {getInitials(profile?.full_name || null, profile?.email || '')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="hidden md:inline">{profile?.full_name || 'Account'}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
+                  <User className="w-4 h-4 mr-2" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="text-destructive">
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
