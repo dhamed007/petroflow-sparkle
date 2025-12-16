@@ -27,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import Analytics from "./pages/Analytics";
 import Customers from "./pages/Customers";
+import Reports from "./pages/Reports";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
             <Route path="/customers" element={<AuthGuard><Customers /></AuthGuard>} />
+            <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

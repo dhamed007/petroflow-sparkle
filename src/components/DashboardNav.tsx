@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Package, Truck, Archive, FileText, Settings, Shield, CreditCard, Users, Link, Activity, MapPin, User, BarChart3, Building2 } from "lucide-react";
+import { Package, Truck, Archive, FileText, Settings, Shield, CreditCard, Users, Link, Activity, MapPin, User, BarChart3, Building2, FileDown } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +60,7 @@ const DashboardNav = () => {
     { label: "Analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" /> },
     { label: "Fleet", path: "/fleet", icon: <Truck className="w-4 h-4" /> },
     { label: "Customers", path: "/customers", icon: <Building2 className="w-4 h-4" /> },
+    { label: "Reports", path: "/reports", icon: <FileDown className="w-4 h-4" /> },
     { label: "Users", path: "/settings/users", icon: <Users className="w-4 h-4" />, requiredRole: "tenant_admin" },
     { label: "Subscription", path: "/subscriptions", icon: <CreditCard className="w-4 h-4" /> },
     { label: "ERP", path: "/integrations/erp", icon: <Link className="w-4 h-4" /> },
