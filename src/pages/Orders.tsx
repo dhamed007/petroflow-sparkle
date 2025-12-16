@@ -5,12 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import DashboardNav from "@/components/DashboardNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Package, Search } from "lucide-react";
+import { Plus, Package, Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { OrderDialog } from "@/components/orders/OrderDialog";
 import { OrderCard } from "@/components/orders/OrderCard";
+import { AssignmentDialog } from "@/components/orders/AssignmentDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const Orders = () => {
@@ -23,6 +24,7 @@ const Orders = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [assignmentDialog, setAssignmentDialog] = useState<{ open: boolean; order: any }>({ open: false, order: null });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -175,12 +177,24 @@ const Orders = () => {
         ) : (
           <div className="grid gap-4">
             {filteredOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                onEdit={() => handleEditOrder(order)}
-                onDelete={() => handleDeleteClick(order.id)}
-              />
+              <div key={order.id} className="relative">
+                <OrderCard
+                  order={order}
+                  onEdit={() => handleEditOrder(order)}
+                  onDelete={() => handleDeleteClick(order.id)}
+                />
+                {order.status === 'pending' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute top-4 right-24 gap-1"
+                    onClick={() => setAssignmentDialog({ open: true, order })}
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Assign
+                  </Button>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -209,6 +223,13 @@ const Orders = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AssignmentDialog
+        open={assignmentDialog.open}
+        onOpenChange={(open) => setAssignmentDialog({ ...assignmentDialog, open })}
+        order={assignmentDialog.order}
+        onSuccess={fetchOrders}
+      />
     </div>
   );
 };

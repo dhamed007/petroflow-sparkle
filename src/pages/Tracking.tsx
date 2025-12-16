@@ -1,5 +1,5 @@
 import DashboardNav from '@/components/DashboardNav';
-import { GPSTracker } from '@/components/fleet/GPSTracker';
+import { FleetMap } from '@/components/tracking/FleetMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -24,7 +24,7 @@ export default function Tracking() {
           <p className="text-muted-foreground">Monitor your fleet in real-time</p>
         </div>
 
-        <GPSTracker />
+        <FleetMap />
       </main>
     </div>
   );
