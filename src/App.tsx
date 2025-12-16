@@ -26,6 +26,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
 import Analytics from "./pages/Analytics";
+import Customers from "./pages/Customers";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/admin" element={<AuthGuard><Admin /></AuthGuard>} />
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
+            <Route path="/customers" element={<AuthGuard><Customers /></AuthGuard>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
