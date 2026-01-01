@@ -16,7 +16,7 @@ const LiveDashboard = () => {
             </span>
           </h2>
           <p className="text-xl text-muted-foreground">
-            Monitor your entire fleet, track deliveries, and gain insights with our comprehensive dashboard designed for petroleum logistics.
+            Monitor your entire fleet, track deliveries, and gain insights with our comprehensive dashboard designed for modern logistics.
           </p>
         </div>
 
@@ -38,7 +38,7 @@ const LiveDashboard = () => {
               <div className="text-center space-y-2">
                 <div className="flex items-center justify-center gap-2">
                   <Activity className="w-5 h-5 text-accent" />
-                  <span className="text-sm font-medium text-muted-foreground">Inventory and fuel level monitoring</span>
+                  <span className="text-sm font-medium text-muted-foreground">Inventory and stock level monitoring</span>
                 </div>
               </div>
             </div>
