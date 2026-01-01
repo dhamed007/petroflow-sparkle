@@ -6,6 +6,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface GatewayCredentials {
+  gateway_type: string;
+  secret_key: string;
+  is_sandbox: boolean;
+}
+
+interface DecryptedGateway {
+  id: string;
+  tenant_id: string;
+  gateway_type: string;
+  public_key: string | null;
+  secret_key: string | null;
+  client_id: string | null;
+  client_secret: string | null;
+  webhook_url: string | null;
+  is_active: boolean;
+  is_sandbox: boolean;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,34 +45,54 @@ serve(async (req) => {
       .single();
 
     if (txError || !transaction) {
+      console.error("Transaction lookup error:", txError);
       throw new Error("Transaction not found");
     }
 
-    let gateway: any;
+    let gateway: GatewayCredentials;
 
     // Check if this is app-level payment (subscription)
     if (transaction.gateway_response?.subscription_metadata?.payment_level === 'app') {
       // Use VisionsEdge's Paystack configuration
+      const secretKey = Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY");
+      
+      if (!secretKey) {
+        console.error("VisionsEdge Paystack configuration not found");
+        throw new Error("Payment configuration not found");
+      }
+      
       gateway = {
         gateway_type: 'paystack',
-        secret_key_encrypted: Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY"),
+        secret_key: secretKey,
         is_sandbox: false,
       };
     } else {
-      // Get tenant's payment gateway for customer payments
-      const { data: tenantGateway } = await supabase
-        .from("payment_gateways")
-        .select("*")
-        .eq("tenant_id", transaction.tenant_id)
-        .eq("gateway_type", gateway_type)
-        .eq("is_active", true)
+      // Get tenant's payment gateway using secure RPC function
+      // This uses server-side decryption of credentials
+      const { data: rpcResult, error: gatewayError } = await supabase
+        .rpc('get_decrypted_payment_gateway', {
+          p_tenant_id: transaction.tenant_id,
+          p_gateway_type: gateway_type
+        })
         .single();
 
-      if (!tenantGateway) {
+      const tenantGateway = rpcResult as DecryptedGateway | null;
+
+      if (gatewayError || !tenantGateway) {
+        console.error("Payment gateway lookup error:", gatewayError);
         throw new Error("Payment gateway not found");
       }
+
+      if (!tenantGateway.secret_key) {
+        console.error("Payment gateway credentials not properly configured");
+        throw new Error("Payment gateway credentials not configured");
+      }
       
-      gateway = tenantGateway;
+      gateway = {
+        gateway_type: tenantGateway.gateway_type,
+        secret_key: tenantGateway.secret_key,
+        is_sandbox: tenantGateway.is_sandbox,
+      };
     }
 
     let verificationResponse;
@@ -148,46 +187,48 @@ serve(async (req) => {
         .eq("transaction_reference", reference);
     }
 
+    console.log("Payment verified successfully for reference:", reference, "status:", status);
+
     return new Response(JSON.stringify({ status, data: verificationResponse }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: any) {
-    console.error("Payment verification error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Payment verification error:", error.message);
+    return new Response(JSON.stringify({ error: "Payment verification failed" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
 });
 
-async function verifyPaystack(gateway: any, reference: string) {
+async function verifyPaystack(gateway: GatewayCredentials, reference: string) {
   const url = `https://api.paystack.co/transaction/verify/${reference}`;
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${gateway.secret_key_encrypted}`,
+      Authorization: `Bearer ${gateway.secret_key}`,
     },
   });
 
   return await response.json();
 }
 
-async function verifyFlutterwave(gateway: any, reference: string) {
+async function verifyFlutterwave(gateway: GatewayCredentials, reference: string) {
   const url = `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${reference}`;
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      Authorization: `Bearer ${gateway.secret_key_encrypted}`,
+      Authorization: `Bearer ${gateway.secret_key}`,
     },
   });
 
   return await response.json();
 }
 
-async function verifyInterswitch(gateway: any, reference: string) {
+async function verifyInterswitch(gateway: GatewayCredentials, reference: string) {
   // Interswitch verification would go here
   return {
     status: "pending",

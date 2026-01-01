@@ -1122,6 +1122,43 @@ export type Database = {
         }
         Returns: string
       }
+      decrypt_secret: { Args: { encrypted_value: string }; Returns: string }
+      encrypt_secret: { Args: { secret_value: string }; Returns: string }
+      get_decrypted_erp_integration: {
+        Args: { p_integration_id: string }
+        Returns: {
+          access_token: string
+          api_endpoint: string
+          api_version: string
+          credentials_encrypted: Json
+          erp_system: string
+          id: string
+          is_active: boolean
+          is_sandbox: boolean
+          name: string
+          oauth_config: Json
+          refresh_token: string
+          tenant_id: string
+          token_expires_at: string
+          token_type: string
+          webhook_secret: string
+        }[]
+      }
+      get_decrypted_payment_gateway: {
+        Args: { p_gateway_type: string; p_tenant_id: string }
+        Returns: {
+          client_id: string
+          client_secret: string
+          gateway_type: string
+          id: string
+          is_active: boolean
+          is_sandbox: boolean
+          public_key: string
+          secret_key: string
+          tenant_id: string
+          webhook_url: string
+        }[]
+      }
       get_user_tenant_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
