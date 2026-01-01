@@ -6,6 +6,7 @@ import Hero from '@/components/landing/Hero';
 import Features from '@/components/landing/Features';
 import Solutions from '@/components/landing/Solutions';
 import LiveDashboard from '@/components/landing/LiveDashboard';
+import Pricing from '@/components/landing/Pricing';
 import CTA from '@/components/landing/CTA';
 import Footer from '@/components/landing/Footer';
 
@@ -26,6 +27,7 @@ const Index = () => {
       <Features />
       <Solutions />
       <LiveDashboard />
+      <Pricing />
       <CTA />
       <Footer />
     </main>
