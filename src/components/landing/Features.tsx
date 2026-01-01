@@ -19,8 +19,8 @@ const features = [
   },
   {
     icon: Database,
-    title: "Product Management",
-    description: "Manage petroleum products including diesel, petrol, and kerosene",
+    title: "Inventory Management",
+    description: "Manage products, stock levels, and warehouse operations efficiently",
   },
   {
     icon: Users,
@@ -55,11 +55,11 @@ const Features = () => {
           <h2 className="text-4xl md:text-5xl font-bold">
             Everything You Need for{" "}
             <span className="text-accent">
-              Petroleum Logistics
+              Modern Logistics
             </span>
           </h2>
           <p className="text-xl text-muted-foreground">
-            From order placement to delivery tracking, PetroFlow handles every aspect of your petroleum supply chain.
+            From order placement to delivery tracking, PetroFlow handles every aspect of your supply chain management.
           </p>
         </div>
 

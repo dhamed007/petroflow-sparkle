@@ -25,7 +25,7 @@ const Hero = () => {
             {/* Trust Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 border border-accent/20">
               <CheckCircle className="w-4 h-4 text-accent" />
-              <span className="text-sm font-medium text-accent">Trusted by 500+ Energy Companies Worldwide</span>
+              <span className="text-sm font-medium text-accent">Trusted by 500+ Companies Worldwide</span>
             </div>
 
             {/* Main Headline */}
@@ -38,7 +38,7 @@ const Hero = () => {
 
             {/* Subheadline */}
             <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Streamline your petroleum supply chain with real-time tracking, automated logistics, and comprehensive fleet management.
+              Streamline your supply chain with real-time tracking, automated logistics, and comprehensive fleet management for any industry.
             </p>
 
             {/* CTA Buttons */}

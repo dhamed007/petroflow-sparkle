@@ -14,7 +14,7 @@ const Footer = () => {
               <p className="text-xs text-muted-foreground">by Visionsedge Technologies</p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Enterprise petroleum distribution management platform trusted by 500+ companies worldwide.
+              Enterprise logistics and distribution management platform trusted by 500+ companies worldwide.
             </p>
           </div>
 
