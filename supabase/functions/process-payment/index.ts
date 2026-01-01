@@ -15,6 +15,25 @@ interface PaymentRequest {
   metadata?: any;
 }
 
+interface GatewayCredentials {
+  gateway_type: string;
+  secret_key: string;
+  is_sandbox: boolean;
+}
+
+interface DecryptedGateway {
+  id: string;
+  tenant_id: string;
+  gateway_type: string;
+  public_key: string | null;
+  secret_key: string | null;
+  client_id: string | null;
+  client_secret: string | null;
+  webhook_url: string | null;
+  is_active: boolean;
+  is_sandbox: boolean;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -52,35 +71,50 @@ serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
 
-    let gateway: any;
+    let gateway: GatewayCredentials;
 
     // Check if this is app-level payment (subscription) or tenant-level payment (customer)
     if (paymentRequest.metadata?.payment_level === 'app') {
       // Use VisionsEdge's Paystack configuration for subscriptions
+      const secretKey = Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY");
+      
+      if (!secretKey) {
+        console.error("VisionsEdge Paystack configuration not found");
+        throw new Error("Payment configuration not found");
+      }
+      
       gateway = {
         gateway_type: 'paystack',
-        secret_key_encrypted: Deno.env.get("VISIONSEDGE_PAYSTACK_SECRET_KEY"),
+        secret_key: secretKey,
         is_sandbox: false,
       };
-      
-      if (!gateway.secret_key_encrypted) {
-        throw new Error("VisionsEdge Paystack configuration not found");
-      }
     } else {
-      // Get tenant's payment gateway configuration for customer payments
-      const { data: tenantGateway, error: gatewayError } = await supabase
-        .from("payment_gateways")
-        .select("*")
-        .eq("tenant_id", profile.tenant_id)
-        .eq("gateway_type", paymentRequest.gateway_type)
-        .eq("is_active", true)
+      // Get tenant's payment gateway configuration using secure RPC function
+      // This uses server-side decryption of credentials
+      const { data: rpcResult, error: gatewayError } = await supabase
+        .rpc('get_decrypted_payment_gateway', {
+          p_tenant_id: profile.tenant_id,
+          p_gateway_type: paymentRequest.gateway_type
+        })
         .single();
 
+      const tenantGateway = rpcResult as DecryptedGateway | null;
+
       if (gatewayError || !tenantGateway) {
+        console.error("Payment gateway error:", gatewayError);
         throw new Error("Payment gateway not configured or inactive");
       }
+
+      if (!tenantGateway.secret_key) {
+        console.error("Payment gateway credentials not properly configured");
+        throw new Error("Payment gateway credentials not configured");
+      }
       
-      gateway = tenantGateway;
+      gateway = {
+        gateway_type: tenantGateway.gateway_type,
+        secret_key: tenantGateway.secret_key,
+        is_sandbox: tenantGateway.is_sandbox,
+      };
     }
 
     let paymentResponse;
@@ -127,28 +161,28 @@ serve(async (req) => {
 
     await supabase.from("payment_transactions").insert(transactionData);
 
+    console.log("Payment processed successfully for reference:", paymentRequest.reference);
+
     return new Response(JSON.stringify(paymentResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: any) {
-    console.error("Payment processing error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Payment processing error:", error.message);
+    return new Response(JSON.stringify({ error: "Payment processing failed" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
 });
 
-async function processPaystack(gateway: any, request: PaymentRequest) {
-  const url = gateway.is_sandbox 
-    ? "https://api.paystack.co/transaction/initialize"
-    : "https://api.paystack.co/transaction/initialize";
+async function processPaystack(gateway: GatewayCredentials, request: PaymentRequest) {
+  const url = "https://api.paystack.co/transaction/initialize";
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${gateway.secret_key_encrypted}`,
+      Authorization: `Bearer ${gateway.secret_key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -164,15 +198,13 @@ async function processPaystack(gateway: any, request: PaymentRequest) {
   return data;
 }
 
-async function processFlutterwave(gateway: any, request: PaymentRequest) {
-  const url = gateway.is_sandbox
-    ? "https://api.flutterwave.com/v3/payments"
-    : "https://api.flutterwave.com/v3/payments";
+async function processFlutterwave(gateway: GatewayCredentials, request: PaymentRequest) {
+  const url = "https://api.flutterwave.com/v3/payments";
 
   const response = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${gateway.secret_key_encrypted}`,
+      Authorization: `Bearer ${gateway.secret_key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -193,7 +225,7 @@ async function processFlutterwave(gateway: any, request: PaymentRequest) {
   return data;
 }
 
-async function processInterswitch(gateway: any, request: PaymentRequest) {
+async function processInterswitch(gateway: GatewayCredentials, request: PaymentRequest) {
   // Interswitch implementation would go here
   // This is a placeholder as Interswitch has a more complex integration
   return {
