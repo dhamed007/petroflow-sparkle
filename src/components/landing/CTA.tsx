@@ -12,14 +12,14 @@ const CTA = () => {
             Get Started Today
           </div>
           
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
             Ready to Transform Your{" "}
             <span className="text-accent">
               Logistics Operations?
             </span>
           </h2>
           
-          <p className="text-xl text-foreground/90 max-w-2xl mx-auto">
+          <p className="text-xl text-white/90 max-w-2xl mx-auto">
             Join leading companies who trust PetroFlow for their supply chain and logistics management.
           </p>
 
