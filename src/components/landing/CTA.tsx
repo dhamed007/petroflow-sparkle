@@ -20,7 +20,7 @@ const CTA = () => {
           </h2>
           
           <p className="text-xl text-foreground/90 max-w-2xl mx-auto">
-            Join leading petroleum companies who trust PetroFlow for their supply chain management.
+            Join leading companies who trust PetroFlow for their supply chain and logistics management.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">

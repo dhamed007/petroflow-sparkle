@@ -6,7 +6,7 @@ const portals = [
   {
     icon: Users,
     title: "Client Portal",
-    description: "Place orders, track deliveries, and manage your petroleum supply chain",
+    description: "Place orders, track deliveries, and manage your supply chain",
     features: ["Browse Products", "Place Orders", "Track Deliveries", "Order History"]
   },
   {
@@ -38,7 +38,7 @@ const Solutions = () => {
             </span>
           </h2>
           <p className="text-xl text-muted-foreground">
-            Each portal is designed specifically for your role in the petroleum supply chain.
+            Each portal is designed specifically for your role in the supply chain.
           </p>
         </div>
 
