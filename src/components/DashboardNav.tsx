@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Package, Truck, Archive, FileText, Settings, Shield, CreditCard, Users, Link, Activity, MapPin, User, BarChart3, Building2, FileDown } from "lucide-react";
+import { Package, Truck, Archive, FileText, Settings, Shield, CreditCard, Users, Link, Activity, MapPin, User, BarChart3, Building2, FileDown, Menu } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface NavItem {
   label: string;
@@ -28,20 +36,22 @@ const DashboardNav = () => {
   const { user, signOut } = useAuth();
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; email: string } | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const fetchUserData = async () => {
       if (!user) return;
-      
+
       const [rolesResult, profileResult] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', user.id),
         supabase.from('profiles').select('full_name, avatar_url, email').eq('id', user.id).single()
       ]);
-      
+
       if (!rolesResult.error && rolesResult.data) {
         setUserRoles(rolesResult.data.map((r) => r.role));
       }
-      
+
       if (!profileResult.error && profileResult.data) {
         setProfile(profileResult.data);
       }
@@ -80,16 +90,55 @@ const DashboardNav = () => {
     return email.substring(0, 2).toUpperCase();
   };
 
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    setMobileMenuOpen(false);
+  };
+
+  const UserMenu = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-2">
+          <Avatar className="w-6 h-6">
+            <AvatarImage src={profile?.avatar_url || undefined} />
+            <AvatarFallback className="text-xs">
+              {getInitials(profile?.full_name || null, profile?.email || '')}
+            </AvatarFallback>
+          </Avatar>
+          <span className="hidden md:inline">{profile?.full_name || 'Account'}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel>My Account</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => handleNavClick('/profile')}>
+          <User className="w-4 h-4 mr-2" />
+          Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleNavClick('/settings')}>
+          <Settings className="w-4 h-4 mr-2" />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={signOut} className="text-destructive">
+          Sign Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
+          {/* Logo */}
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
             <Activity className="w-6 h-6 text-accent" />
             <span className="text-xl font-bold">PetroFlow</span>
           </div>
 
-          <div className="flex items-center gap-1">
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center gap-1">
             {filteredNavItems.map((item) => (
               <Button
                 key={item.path}
@@ -99,43 +148,46 @@ const DashboardNav = () => {
                 className="gap-2"
               >
                 {item.icon}
-                <span className="hidden lg:inline">{item.label}</span>
+                <span className="hidden xl:inline">{item.label}</span>
               </Button>
             ))}
-            
-            {/* Notifications */}
+          </div>
+
+          {/* Right side: Notifications + User + Mobile menu */}
+          <div className="flex items-center gap-1">
             <NotificationsDropdown />
-            
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2 ml-2">
-                  <Avatar className="w-6 h-6">
-                    <AvatarImage src={profile?.avatar_url || undefined} />
-                    <AvatarFallback className="text-xs">
-                      {getInitials(profile?.full_name || null, profile?.email || '')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="hidden md:inline">{profile?.full_name || 'Account'}</span>
+            <UserMenu />
+
+            {/* Mobile hamburger */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm" className="lg:hidden">
+                  <Menu className="w-5 h-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')}>
-                  <User className="w-4 h-4 mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={signOut} className="text-destructive">
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-accent" />
+                    PetroFlow
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 flex flex-col gap-1">
+                  {filteredNavItems.map((item) => (
+                    <Button
+                      key={item.path}
+                      variant={location.pathname === item.path ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handleNavClick(item.path)}
+                      className="justify-start gap-3 w-full"
+                    >
+                      {item.icon}
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </div>

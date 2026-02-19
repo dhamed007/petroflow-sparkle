@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardNav from '@/components/DashboardNav';
-import { Truck, MapPin, Package, CheckCircle, Clock } from 'lucide-react';
+import { Truck, MapPin, Package, CheckCircle, Clock, Navigation, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useGPSTracking } from '@/hooks/useGPSTracking';
 
 export default function DriverDashboard() {
   const { user } = useAuth();
@@ -17,6 +18,31 @@ export default function DriverDashboard() {
   const { toast } = useToast();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const handleGPSUpdate = useCallback(async (position: { lat: number; lng: number; accuracy: number; timestamp: number }) => {
+    if (!user) return;
+    // Find the truck assigned to this driver and update its location
+    const { error } = await supabase
+      .from('trucks')
+      .update({
+        last_location: {
+          lat: position.lat,
+          lng: position.lng,
+          accuracy: position.accuracy,
+          timestamp: new Date(position.timestamp).toISOString(),
+        },
+        status: 'in_use',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('assigned_driver_id', user.id);
+
+    if (error) console.error('GPS update error:', error);
+  }, [user]);
+
+  const gps = useGPSTracking({
+    onPositionUpdate: handleGPSUpdate,
+    updateInterval: 10000,
+  });
 
   useEffect(() => {
     if (!roleLoading && !hasRole('driver')) {
@@ -184,6 +210,42 @@ export default function DriverDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* GPS Tracking Card */}
+        <Card className="mb-6">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Navigation className="h-4 w-4" />
+              GPS Location Sharing
+            </CardTitle>
+            {gps.isOffline && (
+              <Badge variant="outline" className="text-yellow-600">
+                <WifiOff className="h-3 w-3 mr-1" />
+                Offline ({gps.queuedUpdates} queued)
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <Button
+                variant={gps.isTracking ? "default" : "outline"}
+                onClick={gps.isTracking ? gps.stopTracking : gps.startTracking}
+              >
+                <Navigation className="h-4 w-4 mr-2" />
+                {gps.isTracking ? 'Stop Sharing' : 'Start Sharing Location'}
+              </Button>
+              {gps.currentPosition && (
+                <p className="text-sm text-muted-foreground">
+                  {gps.currentPosition.lat.toFixed(5)}, {gps.currentPosition.lng.toFixed(5)}
+                  {' '}({Math.round(gps.currentPosition.accuracy)}m accuracy)
+                </p>
+              )}
+              {gps.error && (
+                <p className="text-sm text-destructive">{gps.error}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Deliveries List */}
         <Card>

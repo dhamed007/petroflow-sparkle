@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { withRateLimit } from '@/utils/rateLimiter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -103,24 +104,29 @@ export function GPSSimulator() {
   const updateTruckLocation = async (lat: number, lng: number, waypointName: string) => {
     if (!selectedTruck) return;
 
-    const { error } = await supabase
-      .from('trucks')
-      .update({
-        last_location: {
-          lat,
-          lng,
-          timestamp: new Date().toISOString(),
-          waypoint: waypointName
-        },
-        status: 'in_use',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', selectedTruck);
+    try {
+      await withRateLimit('gps', async () => {
+        const { error } = await supabase
+          .from('trucks')
+          .update({
+            last_location: {
+              lat,
+              lng,
+              timestamp: new Date().toISOString(),
+              waypoint: waypointName
+            },
+            status: 'in_use',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedTruck);
 
-    if (error) {
-      console.error('Error updating location:', error);
-    } else {
-      console.log(`Updated truck location: ${waypointName} (${lat}, ${lng})`);
+        if (error) {
+          console.error('Error updating location:', error);
+        }
+      });
+    } catch (err) {
+      // Rate limited — skip this update
+      console.debug('GPS update rate limited, skipping');
     }
   };
 

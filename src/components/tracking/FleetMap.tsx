@@ -147,7 +147,7 @@ export function FleetMap() {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="h-[500px] relative">
+        <div className="h-[300px] md:h-[500px] relative">
           {trucks.length === 0 && !loading ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/50 z-10">
               <Truck className="w-12 h-12 text-muted-foreground mb-4" />

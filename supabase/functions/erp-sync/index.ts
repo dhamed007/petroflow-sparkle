@@ -75,7 +75,7 @@ serve(async (req) => {
       throw new Error("Failed to fetch field mappings");
     }
 
-    // Create sync log
+    // Create sync log with retry tracking
     const { data: syncLog, error: logError } = await supabase
       .from("erp_sync_logs")
       .insert({
@@ -85,6 +85,7 @@ serve(async (req) => {
         sync_status: 'in_progress',
         triggered_by: user.id,
         is_manual: true,
+        retry_count: 0,
       })
       .select()
       .single();
@@ -145,15 +146,32 @@ serve(async (req) => {
         status: 200,
       });
     } catch (syncError: any) {
-      // Update sync log with failure
-      await supabase
-        .from("erp_sync_logs")
-        .update({
-          sync_status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: syncError.message,
-        })
-        .eq("id", syncLog.id);
+      const currentRetryCount = syncLog.retry_count || 0;
+      const maxRetries = 3;
+
+      if (currentRetryCount < maxRetries) {
+        // Mark as retrying — client can pick up and retry
+        await supabase
+          .from("erp_sync_logs")
+          .update({
+            sync_status: 'retrying',
+            completed_at: new Date().toISOString(),
+            error_message: syncError.message,
+            retry_count: currentRetryCount + 1,
+          })
+          .eq("id", syncLog.id);
+      } else {
+        // Max retries exceeded — mark as dead_letter
+        await supabase
+          .from("erp_sync_logs")
+          .update({
+            sync_status: 'dead_letter',
+            completed_at: new Date().toISOString(),
+            error_message: `Max retries (${maxRetries}) exceeded. Last error: ${syncError.message}`,
+            retry_count: currentRetryCount,
+          })
+          .eq("id", syncLog.id);
+      }
 
       throw syncError;
     }
