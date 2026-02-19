@@ -22,19 +22,20 @@ export default function DriverDashboard() {
   const handleGPSUpdate = useCallback(async (position: { lat: number; lng: number; accuracy: number; timestamp: number }) => {
     if (!user) return;
     // Find the truck assigned to this driver and update its location
+    const updateData: Record<string, unknown> = {
+      last_location: {
+        lat: position.lat,
+        lng: position.lng,
+        accuracy: position.accuracy,
+        timestamp: new Date(position.timestamp).toISOString(),
+      },
+      status: 'in_use',
+      updated_at: new Date().toISOString(),
+    };
     const { error } = await supabase
       .from('trucks')
-      .update({
-        last_location: {
-          lat: position.lat,
-          lng: position.lng,
-          accuracy: position.accuracy,
-          timestamp: new Date(position.timestamp).toISOString(),
-        },
-        status: 'in_use',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('assigned_driver_id', user.id);
+      .update(updateData as any)
+      .eq('driver_id', user.id);
 
     if (error) console.error('GPS update error:', error);
   }, [user]);
