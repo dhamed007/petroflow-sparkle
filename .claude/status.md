@@ -8,6 +8,7 @@ Last updated: 2026-02-20
 
 | Commit | Description |
 |--------|-------------|
+| `4253edb` | Add server-side ERP sync retry cron job |
 | `18086c9` | Close 3 security gaps: payment rate limiting, subscription caps, data export |
 | `eb18782` | Reduce initial bundle from 2.19MB to ~500KB via code splitting |
 | `f9134f1` | Refactored GPS update — fix filter column `driver_id` (pulled from remote) |
@@ -22,7 +23,7 @@ Last updated: 2026-02-20
 | RLS cross-tenant isolation | ✅ Done | All tables use `get_user_tenant_id()`, audit_logs fix applied |
 | Rate limiting on payment endpoints | ✅ Done | Server-side in `process-payment` (5/60s) and `verify-payment` (10/60s) |
 | Subscription cap enforcement | ✅ Done | DB triggers `enforce_user_cap` + `enforce_truck_cap` on INSERT |
-| Background jobs for ERP sync | ⚠️ Partial | Client-side retry queue (60s poll). No server-side cron yet. |
+| Background jobs for ERP sync | ✅ Done | `erp-sync-retry` edge function + pg_cron every 5 min. Exponential backoff, dead-letter after max_retries. |
 | Backup + disaster recovery | ✅ Done | `export-tenant-data` edge function + Settings UI card + PITR docs |
 | Mobile responsiveness | ✅ Done | DashboardNav hamburger menu, FleetMap/Tracking responsive |
 | PWA support | ✅ Done | vite-plugin-pwa, workbox caching, service worker |
@@ -33,9 +34,7 @@ Last updated: 2026-02-20
 
 ## Known Remaining Gaps
 
-| Gap | Detail |
-|-----|--------|
-| ERP sync background job | Retry queue is client-side only — stops if browser closes. Needs Supabase cron (pg_cron or Edge Function scheduler) |
+None — all identified gaps resolved.
 
 ---
 
@@ -60,7 +59,8 @@ Last updated: 2026-02-20
 | `erp-connect` | ERP auth setup (OAuth/API key) |
 | `erp-field-mapping-ai` | AI-suggested ERP field mappings (Gemini) |
 | `erp-refresh-token` | OAuth token refresh for QuickBooks, Dynamics365 |
-| `erp-sync` | Bidirectional ERP sync with retry + dead-letter |
+| `erp-sync` | Bidirectional ERP sync with retry + dead-letter. Accepts service role key for internal calls. |
+| `erp-sync-retry` | Cron-triggered retry runner. Exponential backoff, promotes to dead_letter after max_retries. |
 | `erp-webhook` | HMAC-verified ERP webhook receiver |
 | `process-payment` | Payment initiation (Paystack, Flutterwave, Interswitch) — rate limited |
 | `verify-payment` | Payment verification + subscription activation — rate limited |
