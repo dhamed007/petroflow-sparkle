@@ -11,9 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { FileText, FileSpreadsheet, Download, Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 type ReportType = "orders" | "deliveries" | "invoices";
 type DateRange = { from: Date | undefined; to: Date | undefined };
@@ -136,6 +133,10 @@ const Reports = () => {
         return;
       }
 
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
       const doc = new jsPDF();
       const title = `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`;
       const dateStr = `${format(dateRange.from || new Date(), "MMM dd, yyyy")} - ${format(dateRange.to || new Date(), "MMM dd, yyyy")}`;
@@ -176,6 +177,7 @@ const Reports = () => {
         return;
       }
 
+      const XLSX = await import("xlsx");
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, reportType.charAt(0).toUpperCase() + reportType.slice(1));

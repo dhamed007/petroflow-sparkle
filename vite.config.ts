@@ -44,6 +44,7 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MiB
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
@@ -72,6 +73,21 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ].filter(Boolean),
+  build: {
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom"],
+          router: ["react-router-dom"],
+          query: ["@tanstack/react-query"],
+          supabase: ["@supabase/supabase-js"],
+          maps: ["leaflet", "react-leaflet"],
+          charts: ["recharts"],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
