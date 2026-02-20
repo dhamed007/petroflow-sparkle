@@ -21,12 +21,17 @@ serve(async (req) => {
       throw new Error("No authorization header");
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
+    const token = authHeader.replace("Bearer ", "");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    if (authError || !user) {
-      throw new Error("Unauthorized");
+    // Allow internal calls from erp-sync-retry cron (service role key as bearer)
+    let userId: string;
+    if (token === serviceRoleKey) {
+      userId = "system";
+    } else {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) throw new Error("Unauthorized");
+      userId = user.id;
     }
 
     const { integration_id, entity_type, direction } = await req.json();
@@ -83,8 +88,8 @@ serve(async (req) => {
         entity_type,
         sync_direction: direction,
         sync_status: 'in_progress',
-        triggered_by: user.id,
-        is_manual: true,
+        triggered_by: userId === "system" ? null : userId,
+        is_manual: userId !== "system",
         retry_count: 0,
       })
       .select()
