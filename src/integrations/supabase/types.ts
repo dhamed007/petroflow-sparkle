@@ -697,6 +697,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers_delivery_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "orders_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -1109,7 +1116,53 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      customers_delivery_info: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_person: string | null
+          country: string | null
+          id: string | null
+          is_active: boolean | null
+          name: string | null
+          postal_code: string | null
+          region: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          postal_code?: string | null
+          region?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_person?: string | null
+          country?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          postal_code?: string | null
+          region?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_audit_log: {
