@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Settings as SettingsIcon, Upload, Copy, Check } from "lucide-react";
+import { Settings as SettingsIcon, Upload, Copy, Check, Download } from "lucide-react";
+import { format } from "date-fns";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ const Settings = () => {
   const [primaryColor, setPrimaryColor] = useState("#ea580c");
   const [secondaryColor, setSecondaryColor] = useState("#1e3a8a");
   const [copiedCode, setCopiedCode] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -154,6 +156,28 @@ const Settings = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    setExporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-tenant-data");
+      if (error) throw error;
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `petroflow-backup-${format(new Date(), "yyyy-MM-dd")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: "Backup downloaded", description: "Your tenant data has been exported successfully." });
+    } catch (error: any) {
+      toast({ title: "Export failed", description: error.message, variant: "destructive" });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -312,6 +336,25 @@ const Settings = () => {
 
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="w-5 h-5" />
+                Data & Backup
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Export all your organisation's data as a JSON file. Includes orders, deliveries,
+                invoices, fleet, inventory, customers, and audit logs.
+              </p>
+              <Button onClick={handleExportBackup} disabled={exporting} variant="outline" className="gap-2">
+                <Download className="w-4 h-4" />
+                {exporting ? "Exporting..." : "Download Backup (JSON)"}
               </Button>
             </CardContent>
           </Card>

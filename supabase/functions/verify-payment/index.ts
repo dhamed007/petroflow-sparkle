@@ -49,6 +49,20 @@ serve(async (req) => {
       throw new Error("Transaction not found");
     }
 
+    // Server-side rate limit: max 10 verification attempts per tenant per 60 seconds
+    const { count: recentCount, error: rateError } = await supabase
+      .from("payment_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", transaction.tenant_id)
+      .gte("updated_at", new Date(Date.now() - 60_000).toISOString());
+
+    if (!rateError && (recentCount ?? 0) >= 10) {
+      return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in 60 seconds." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" },
+        status: 429,
+      });
+    }
+
     let gateway: GatewayCredentials;
 
     // Check if this is app-level payment (subscription)

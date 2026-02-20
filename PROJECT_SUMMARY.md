@@ -60,6 +60,37 @@ A **multi-tenant SaaS logistics & fleet management platform** built for the Nige
 
 ---
 
+## Backup & Recovery
+
+### Supabase Automatic Backups
+- **Daily backups** are enabled automatically on Supabase Pro plan and above
+- **Point-in-Time Recovery (PITR)** is available on Pro+ — allows restoring to any second within the retention window (7 days Pro, 30 days Team/Enterprise)
+- To enable PITR: Supabase Dashboard → Project Settings → Database → Point in Time Recovery
+- To restore: Supabase Dashboard → Project Settings → Database → Restore → select timestamp
+
+### Tenant Data Export
+Tenant admins can export all their organisation's data on-demand via **Settings → Data & Backup → Download Backup**.
+
+The export edge function (`supabase/functions/export-tenant-data/`) fetches and bundles:
+
+| Table | Contents |
+|-------|----------|
+| `orders` | All orders with status and delivery info |
+| `customers` | Customer master data |
+| `deliveries` | Delivery records and GPS tracking |
+| `invoices` | Billing and payment records |
+| `trucks` | Fleet vehicles |
+| `inventory` | Stock levels by location |
+| `profiles` | User accounts (name, email — no secrets) |
+| `payment_transactions` | Payment history |
+| `erp_integrations` | ERP connection metadata (no credentials) |
+| `erp_sync_logs` | Last 1,000 sync events |
+| `audit_logs` | Last 1,000 audit entries |
+
+Export is restricted to `tenant_admin` and `super_admin` roles. Each export is logged in `audit_logs`.
+
+---
+
 ## Dev Commands
 ```bash
 npm run dev        # Dev server on port 8080
