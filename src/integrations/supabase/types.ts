@@ -1163,6 +1163,59 @@ export type Database = {
           },
         ]
       }
+      payment_gateways_safe: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          gateway_type: string | null
+          has_client_secret: boolean | null
+          has_secret_key: boolean | null
+          id: string | null
+          is_active: boolean | null
+          is_sandbox: boolean | null
+          public_key: string | null
+          tenant_id: string | null
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          gateway_type?: string | null
+          has_client_secret?: never
+          has_secret_key?: never
+          id?: string | null
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          public_key?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          gateway_type?: string | null
+          has_client_secret?: never
+          has_secret_key?: never
+          id?: string | null
+          is_active?: boolean | null
+          is_sandbox?: boolean | null
+          public_key?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_gateways_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_audit_log: {

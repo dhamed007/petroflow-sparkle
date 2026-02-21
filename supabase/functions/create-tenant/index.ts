@@ -175,8 +175,7 @@ Deno.serve(async (req) => {
       console.error('Error inserting tenant:', insertError);
       return new Response(
         JSON.stringify({ 
-          error: 'Database Error', 
-          message: insertError.message 
+          error: 'Failed to create organization. Please try again or contact support.' 
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -225,8 +224,7 @@ Deno.serve(async (req) => {
     console.error('Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'Internal Server Error', 
-        message: error instanceof Error ? error.message : 'Unknown error' 
+        error: 'Internal server error. Please try again or contact support.' 
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

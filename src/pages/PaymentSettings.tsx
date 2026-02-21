@@ -12,16 +12,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft } from "lucide-react";
 
+interface GatewayState {
+  id?: string;
+  is_active: boolean;
+  is_sandbox: boolean;
+  public_key: string;
+  client_id: string;
+  has_secret_key: boolean;
+  has_client_secret: boolean;
+  // Write-only fields: only sent on save, never populated from DB
+  new_secret_key: string;
+  new_client_secret: string;
+}
+
+const defaultGateway: GatewayState = {
+  is_active: false,
+  is_sandbox: true,
+  public_key: '',
+  client_id: '',
+  has_secret_key: false,
+  has_client_secret: false,
+  new_secret_key: '',
+  new_client_secret: '',
+};
+
 const PaymentSettings = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [gateways, setGateways] = useState<any>({
-    paystack: { is_active: false, is_sandbox: true, public_key: '', secret_key_encrypted: '' },
-    flutterwave: { is_active: false, is_sandbox: true, public_key: '', secret_key_encrypted: '' },
-    interswitch: { is_active: false, is_sandbox: true, client_id: '', client_secret_encrypted: '' },
+  const [gateways, setGateways] = useState<Record<string, GatewayState>>({
+    paystack: { ...defaultGateway },
+    flutterwave: { ...defaultGateway },
+    interswitch: { ...defaultGateway },
   });
 
   useEffect(() => {
@@ -42,22 +66,33 @@ const PaymentSettings = () => {
 
       if (!profile?.tenant_id) return;
 
+      // Use safe view that excludes encrypted credentials
       const { data, error } = await supabase
-        .from('payment_gateways')
+        .from('payment_gateways_safe' as any)
         .select('*')
         .eq('tenant_id', profile.tenant_id);
 
       if (error) throw error;
 
       if (data) {
-        const gatewayConfig: any = {
-          paystack: { is_active: false, is_sandbox: true, public_key: '', secret_key_encrypted: '' },
-          flutterwave: { is_active: false, is_sandbox: true, public_key: '', secret_key_encrypted: '' },
-          interswitch: { is_active: false, is_sandbox: true, client_id: '', client_secret_encrypted: '' },
+        const gatewayConfig: Record<string, GatewayState> = {
+          paystack: { ...defaultGateway },
+          flutterwave: { ...defaultGateway },
+          interswitch: { ...defaultGateway },
         };
 
-        data.forEach((gw: any) => {
-          gatewayConfig[gw.gateway_type] = gw;
+        (data as any[]).forEach((gw: any) => {
+          gatewayConfig[gw.gateway_type] = {
+            id: gw.id,
+            is_active: gw.is_active,
+            is_sandbox: gw.is_sandbox,
+            public_key: gw.public_key || '',
+            client_id: gw.client_id || '',
+            has_secret_key: gw.has_secret_key || false,
+            has_client_secret: gw.has_client_secret || false,
+            new_secret_key: '',
+            new_client_secret: '',
+          };
         });
 
         setGateways(gatewayConfig);
@@ -87,15 +122,27 @@ const PaymentSettings = () => {
         return;
       }
 
-      const gatewayData = {
+      const gw = gateways[gatewayType];
+      const gatewayData: Record<string, any> = {
         tenant_id: profile.tenant_id,
         gateway_type: gatewayType,
-        ...gateways[gatewayType],
+        is_active: gw.is_active,
+        is_sandbox: gw.is_sandbox,
+        public_key: gw.public_key,
+        client_id: gw.client_id,
       };
+
+      // Only include secret fields if user entered new values
+      if (gw.new_secret_key) {
+        gatewayData.secret_key_encrypted = gw.new_secret_key;
+      }
+      if (gw.new_client_secret) {
+        gatewayData.client_secret_encrypted = gw.new_client_secret;
+      }
 
       const { error } = await supabase
         .from('payment_gateways')
-        .upsert(gatewayData, { onConflict: 'tenant_id,gateway_type' });
+        .upsert(gatewayData as any, { onConflict: 'tenant_id,gateway_type' });
 
       if (error) throw error;
 
@@ -184,11 +231,15 @@ const PaymentSettings = () => {
                   <Label>Secret Key</Label>
                   <Input
                     type="password"
-                    value={gateways.paystack.secret_key_encrypted || ''}
-                    onChange={(e) => updateGateway('paystack', 'secret_key_encrypted', e.target.value)}
-                    placeholder="sk_test_..."
+                    value={gateways.paystack.new_secret_key}
+                    onChange={(e) => updateGateway('paystack', 'new_secret_key', e.target.value)}
+                    placeholder={gateways.paystack.has_secret_key ? '••••••••••••' : 'sk_test_...'}
                   />
-                  <p className="text-sm text-muted-foreground mt-1">Your secret key is encrypted and stored securely</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {gateways.paystack.has_secret_key 
+                      ? 'Secret key is configured. Enter a new value to update it.' 
+                      : 'Your secret key is encrypted and stored securely'}
+                  </p>
                 </div>
                 <Button onClick={() => handleSave('paystack')} disabled={saving}>
                   {saving ? 'Saving...' : 'Save Paystack Configuration'}
@@ -230,11 +281,15 @@ const PaymentSettings = () => {
                   <Label>Secret Key</Label>
                   <Input
                     type="password"
-                    value={gateways.flutterwave.secret_key_encrypted || ''}
-                    onChange={(e) => updateGateway('flutterwave', 'secret_key_encrypted', e.target.value)}
-                    placeholder="FLWSECK_TEST..."
+                    value={gateways.flutterwave.new_secret_key}
+                    onChange={(e) => updateGateway('flutterwave', 'new_secret_key', e.target.value)}
+                    placeholder={gateways.flutterwave.has_secret_key ? '••••••••••••' : 'FLWSECK_TEST...'}
                   />
-                  <p className="text-sm text-muted-foreground mt-1">Your secret key is encrypted and stored securely</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {gateways.flutterwave.has_secret_key 
+                      ? 'Secret key is configured. Enter a new value to update it.' 
+                      : 'Your secret key is encrypted and stored securely'}
+                  </p>
                 </div>
                 <Button onClick={() => handleSave('flutterwave')} disabled={saving}>
                   {saving ? 'Saving...' : 'Save Flutterwave Configuration'}
@@ -276,11 +331,15 @@ const PaymentSettings = () => {
                   <Label>Client Secret</Label>
                   <Input
                     type="password"
-                    value={gateways.interswitch.client_secret_encrypted || ''}
-                    onChange={(e) => updateGateway('interswitch', 'client_secret_encrypted', e.target.value)}
-                    placeholder="Your Client Secret"
+                    value={gateways.interswitch.new_client_secret}
+                    onChange={(e) => updateGateway('interswitch', 'new_client_secret', e.target.value)}
+                    placeholder={gateways.interswitch.has_client_secret ? '••••••••••••' : 'Your Client Secret'}
                   />
-                  <p className="text-sm text-muted-foreground mt-1">Your client secret is encrypted and stored securely</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {gateways.interswitch.has_client_secret 
+                      ? 'Client secret is configured. Enter a new value to update it.' 
+                      : 'Your client secret is encrypted and stored securely'}
+                  </p>
                 </div>
                 <Button onClick={() => handleSave('interswitch')} disabled={saving}>
                   {saving ? 'Saving...' : 'Save Interswitch Configuration'}

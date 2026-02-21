@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     if (insertError) {
       console.error('Insert error:', insertError);
       return new Response(
-        JSON.stringify({ error: 'Failed to create order', details: insertError.message }),
+        JSON.stringify({ error: 'Failed to create order. Please try again or contact support.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
