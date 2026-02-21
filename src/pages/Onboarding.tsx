@@ -101,12 +101,11 @@ export default function Onboarding() {
         throw new Error('Please enter an organization code.');
       }
 
-      // Find tenant by slug
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('slug', cleanedSlug)
-        .maybeSingle();
+      // Find tenant by slug using secure RPC (prevents enumeration)
+      const { data: tenantResults, error: tenantError } = await supabase
+        .rpc('lookup_tenant_by_slug', { p_slug: cleanedSlug });
+
+      const tenant = tenantResults?.[0];
 
       if (tenantError || !tenant) {
         throw new Error('Tenant not found. Please check the organization code.');
