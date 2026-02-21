@@ -10,7 +10,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.verify-payment]
-verify_jwt = true
+verify_jwt = false
 
 [functions.erp-connect]
 verify_jwt = true

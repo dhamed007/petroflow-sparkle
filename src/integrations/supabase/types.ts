@@ -1221,6 +1221,16 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      lookup_tenant_by_slug: {
+        Args: { p_slug: string }
+        Returns: {
+          id: string
+          industry: string
+          logo_url: string
+          name: string
+          slug: string
+        }[]
+      }
     }
     Enums: {
       app_role:
