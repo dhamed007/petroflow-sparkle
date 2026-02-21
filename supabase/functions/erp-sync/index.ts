@@ -182,7 +182,7 @@ serve(async (req) => {
     }
   } catch (error: any) {
     console.error("Sync error:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "Sync operation failed. Please try again or contact support." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
