@@ -181,7 +181,7 @@ serve(async (req) => {
       throw syncError;
     }
   } catch (error: any) {
-    console.error("Sync error:", error);
+    console.error("Sync error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,

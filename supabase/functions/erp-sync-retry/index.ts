@@ -35,7 +35,10 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // Fetch all logs currently marked as retrying
+    // Fetch all logs currently marked as retrying — intentionally cross-tenant.
+    // Tenant isolation is enforced downstream: each log's integration_id maps to
+    // a tenant-scoped erp_integrations row, so erp-sync uses only that tenant's
+    // credentials and data. No cross-tenant data or credential contamination possible.
     const { data: logs, error: logsError } = await supabase
       .from("erp_sync_logs")
       .select("id, integration_id, entity_type, sync_direction, retry_count, max_retries")
