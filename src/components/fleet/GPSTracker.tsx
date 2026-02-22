@@ -52,21 +52,29 @@ export function GPSTracker() {
     try {
       const { data, error } = await supabase
         .from('trucks')
-        .select(`
-          id,
-          plate_number,
-          status,
-          last_location,
-          profiles:driver_id (
-            full_name,
-            email
-          )
-        `)
+        .select('id, plate_number, status, last_location, driver_id')
         .not('last_location', 'is', null);
 
       if (error) throw error;
-      
-      setTrucks(data as any || []);
+
+      // Fetch driver profiles
+      const driverIds = (data || []).filter(t => t.driver_id).map(t => t.driver_id!);
+      let driverMap: Record<string, { full_name: string | null; email: string }> = {};
+      if (driverIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', driverIds);
+        if (profiles) {
+          driverMap = Object.fromEntries(profiles.map(d => [d.id, d]));
+        }
+      }
+
+      const trucksWithDrivers = (data || []).map(truck => ({
+        ...truck,
+        driver: truck.driver_id ? driverMap[truck.driver_id] || null : null,
+      }));
+      setTrucks(trucksWithDrivers as any || []);
     } catch (error) {
       console.error('Error fetching truck locations:', error);
     } finally {
