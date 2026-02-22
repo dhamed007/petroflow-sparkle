@@ -27,7 +27,8 @@ interface NavItem {
   label: string;
   path: string;
   icon: React.ReactNode;
-  requiredRole?: string;
+  /** User must have at least one of these roles to see this item. Omit to show to all. */
+  requiredRoles?: string[];
 }
 
 const DashboardNav = () => {
@@ -61,26 +62,35 @@ const DashboardNav = () => {
   }, [user]);
 
   const navItems: NavItem[] = [
+    // Visible to all authenticated tenant members
     { label: "Dashboard", path: "/dashboard", icon: <Activity className="w-4 h-4" /> },
     { label: "Orders", path: "/orders", icon: <Package className="w-4 h-4" /> },
     { label: "Deliveries", path: "/deliveries", icon: <Truck className="w-4 h-4" /> },
     { label: "Tracking", path: "/tracking", icon: <MapPin className="w-4 h-4" /> },
-    { label: "Inventory", path: "/inventory", icon: <Archive className="w-4 h-4" /> },
-    { label: "Invoices", path: "/invoices", icon: <FileText className="w-4 h-4" /> },
-    { label: "Analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" /> },
-    { label: "Fleet", path: "/fleet", icon: <Truck className="w-4 h-4" /> },
-    { label: "Customers", path: "/customers", icon: <Building2 className="w-4 h-4" /> },
-    { label: "Reports", path: "/reports", icon: <FileDown className="w-4 h-4" /> },
-    { label: "Users", path: "/settings/users", icon: <Users className="w-4 h-4" />, requiredRole: "tenant_admin" },
-    { label: "Subscription", path: "/subscriptions", icon: <CreditCard className="w-4 h-4" /> },
-    { label: "ERP", path: "/integrations/erp", icon: <Link className="w-4 h-4" /> },
-    { label: "Settings", path: "/settings", icon: <Settings className="w-4 h-4" />, requiredRole: "tenant_admin" },
-    { label: "Admin", path: "/admin", icon: <Shield className="w-4 h-4" />, requiredRole: "super_admin" },
+
+    // Staff + admin only
+    { label: "Inventory", path: "/inventory", icon: <Archive className="w-4 h-4" />, requiredRoles: ["tenant_admin", "dispatch_officer", "sales_manager", "super_admin"] },
+    { label: "Fleet", path: "/fleet", icon: <Truck className="w-4 h-4" />, requiredRoles: ["tenant_admin", "dispatch_officer", "super_admin"] },
+    { label: "Customers", path: "/customers", icon: <Building2 className="w-4 h-4" />, requiredRoles: ["tenant_admin", "sales_manager", "sales_rep", "dispatch_officer", "super_admin"] },
+
+    // Invoices: admin/sales + clients (clients see only their own via RLS)
+    { label: "Invoices", path: "/invoices", icon: <FileText className="w-4 h-4" />, requiredRoles: ["tenant_admin", "sales_manager", "client", "super_admin"] },
+
+    // Analytics / reporting: admin + sales only
+    { label: "Analytics", path: "/analytics", icon: <BarChart3 className="w-4 h-4" />, requiredRoles: ["tenant_admin", "sales_manager", "super_admin"] },
+    { label: "Reports", path: "/reports", icon: <FileDown className="w-4 h-4" />, requiredRoles: ["tenant_admin", "sales_manager", "super_admin"] },
+
+    // Admin-only pages
+    { label: "Users", path: "/settings/users", icon: <Users className="w-4 h-4" />, requiredRoles: ["tenant_admin", "super_admin"] },
+    { label: "Subscription", path: "/subscriptions", icon: <CreditCard className="w-4 h-4" />, requiredRoles: ["tenant_admin", "super_admin"] },
+    { label: "ERP", path: "/integrations/erp", icon: <Link className="w-4 h-4" />, requiredRoles: ["tenant_admin", "super_admin"] },
+    { label: "Settings", path: "/settings", icon: <Settings className="w-4 h-4" />, requiredRoles: ["tenant_admin", "super_admin"] },
+    { label: "Admin", path: "/admin", icon: <Shield className="w-4 h-4" />, requiredRoles: ["super_admin"] },
   ];
 
   const filteredNavItems = navItems.filter((item) => {
-    if (!item.requiredRole) return true;
-    return userRoles.includes(item.requiredRole);
+    if (!item.requiredRoles || item.requiredRoles.length === 0) return true;
+    return item.requiredRoles.some((role) => userRoles.includes(role));
   });
 
   const getInitials = (name: string | null, email: string) => {
@@ -115,10 +125,12 @@ const DashboardNav = () => {
           <User className="w-4 h-4 mr-2" />
           Profile
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleNavClick('/settings')}>
-          <Settings className="w-4 h-4 mr-2" />
-          Settings
-        </DropdownMenuItem>
+        {(userRoles.includes('tenant_admin') || userRoles.includes('super_admin')) && (
+          <DropdownMenuItem onClick={() => handleNavClick('/settings')}>
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={signOut} className="text-destructive">
           Sign Out

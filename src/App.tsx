@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AuthGuard } from "./components/AuthGuard";
+import { RoleGuard } from "./components/RoleGuard";
 
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -61,18 +62,18 @@ const App = () => (
               <Route path="/deliveries" element={<AuthGuard><Deliveries /></AuthGuard>} />
               <Route path="/inventory" element={<AuthGuard><Inventory /></AuthGuard>} />
               <Route path="/invoices" element={<AuthGuard><Invoices /></AuthGuard>} />
-              <Route path="/fleet" element={<AuthGuard><Fleet /></AuthGuard>} />
+              <Route path="/fleet" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'dispatch_officer', 'super_admin']}><Fleet /></RoleGuard></AuthGuard>} />
               <Route path="/tracking" element={<AuthGuard><Tracking /></AuthGuard>} />
-              <Route path="/subscriptions" element={<AuthGuard><Subscriptions /></AuthGuard>} />
-              <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
-              <Route path="/settings/payments" element={<AuthGuard><PaymentSettings /></AuthGuard>} />
-              <Route path="/settings/users" element={<AuthGuard><UserManagement /></AuthGuard>} />
-              <Route path="/integrations/erp" element={<AuthGuard><ERPIntegrations /></AuthGuard>} />
-              <Route path="/admin" element={<AuthGuard><Admin /></AuthGuard>} />
+              <Route path="/subscriptions" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'super_admin']}><Subscriptions /></RoleGuard></AuthGuard>} />
+              <Route path="/settings" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'super_admin']}><Settings /></RoleGuard></AuthGuard>} />
+              <Route path="/settings/payments" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'super_admin']}><PaymentSettings /></RoleGuard></AuthGuard>} />
+              <Route path="/settings/users" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'super_admin']}><UserManagement /></RoleGuard></AuthGuard>} />
+              <Route path="/integrations/erp" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'super_admin']}><ERPIntegrations /></RoleGuard></AuthGuard>} />
+              <Route path="/admin" element={<AuthGuard><RoleGuard allowedRoles={['super_admin']}><Admin /></RoleGuard></AuthGuard>} />
               <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
-              <Route path="/analytics" element={<AuthGuard><Analytics /></AuthGuard>} />
-              <Route path="/customers" element={<AuthGuard><Customers /></AuthGuard>} />
-              <Route path="/reports" element={<AuthGuard><Reports /></AuthGuard>} />
+              <Route path="/analytics" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'sales_manager', 'super_admin']}><Analytics /></RoleGuard></AuthGuard>} />
+              <Route path="/customers" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'sales_manager', 'sales_rep', 'dispatch_officer', 'super_admin']}><Customers /></RoleGuard></AuthGuard>} />
+              <Route path="/reports" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'sales_manager', 'super_admin']}><Reports /></RoleGuard></AuthGuard>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
