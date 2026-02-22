@@ -46,18 +46,31 @@ const Fleet = () => {
     try {
       const { data, error } = await supabase
         .from('trucks')
-        .select(`
-          *,
-          profiles:driver_id (
-            id,
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTrucks(data || []);
+
+      // Fetch driver profiles for trucks that have driver_id
+      const driverIds = (data || []).filter(t => t.driver_id).map(t => t.driver_id!);
+      let driverMap: Record<string, { id: string; full_name: string | null; email: string }> = {};
+      if (driverIds.length > 0) {
+        const { data: driverProfiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', driverIds);
+        if (driverProfiles) {
+          driverMap = Object.fromEntries(driverProfiles.map(d => [d.id, d]));
+        }
+      }
+
+      const trucksWithDrivers = (data || []).map(truck => ({
+        ...truck,
+        profiles: truck.driver_id ? driverMap[truck.driver_id] || null : null,
+      }));
+
+      if (error) throw error;
+      setTrucks(trucksWithDrivers);
     } catch (error: any) {
       toast({
         title: "Error loading fleet",
