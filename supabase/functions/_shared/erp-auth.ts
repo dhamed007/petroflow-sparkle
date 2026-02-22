@@ -144,12 +144,12 @@ export async function verifyERPAuth(
 }
 
 // ─── Per-tenant ERP sync rate limiting ────────────────────────────────────────
-// Hard limits: 1 sync per 60 seconds, 30 syncs per hour
-
-const WINDOW_60S_MAX = 1;
-const WINDOW_60S_MS = 60_000;
-const WINDOW_1H_MAX = 30;
-const WINDOW_1H_MS = 3_600_000;
+// Hard limits: 1 sync per 60 seconds, 30 syncs per hour.
+//
+// Uses rpc_check_erp_sync_rate_limit() — a PL/pgSQL function that performs
+// SELECT FOR UPDATE on erp_sync_rate_state so concurrent Deno isolates
+// serialise at the DB level, eliminating the TOCTOU race inherent in a
+// separate COUNT + application-level check.
 
 export type RateLimitResult =
   | { allowed: true }
@@ -159,55 +159,50 @@ export async function checkSyncRateLimit(
   supabase: SupabaseClient,
   tenantId: string,
 ): Promise<RateLimitResult> {
-  const now = Date.now();
+  const { data, error } = await supabase.rpc(
+    "rpc_check_erp_sync_rate_limit",
+    { p_tenant_id: tenantId },
+  );
 
-  // 60-second window
-  const { count: recentCount, error: recentErr } = await supabase
-    .from("erp_sync_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .gte("created_at", new Date(now - WINDOW_60S_MS).toISOString());
-
-  if (!recentErr && (recentCount ?? 0) >= WINDOW_60S_MAX) {
-    return { allowed: false, retryAfter: 60 };
+  if (error) {
+    // Fail open on DB errors to avoid blocking legitimate users.
+    console.error("[rate-limit] sync rate limit RPC failed:", error.message);
+    return { allowed: true };
   }
 
-  // Hourly window
-  const { count: hourlyCount, error: hourlyErr } = await supabase
-    .from("erp_sync_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .gte("created_at", new Date(now - WINDOW_1H_MS).toISOString());
-
-  if (!hourlyErr && (hourlyCount ?? 0) >= WINDOW_1H_MAX) {
-    return { allowed: false, retryAfter: 3600 };
+  // supabase.rpc for a RETURNS TABLE function gives back an array.
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.allowed) {
+    return { allowed: false, retryAfter: row?.retry_after_secs ?? 60 };
   }
-
-  // Fail open on DB errors to avoid blocking legitimate users
   return { allowed: true };
 }
 
 // ─── AI cost-protection rate limiting ────────────────────────────────────────
-// Uses audit_logs so no new table is needed.
 // Limit: 10 AI field-mapping calls per tenant per hour.
-
-const AI_HOURLY_MAX = 10;
+//
+// Uses rpc_check_ai_rate_limit() which atomically claims a slot BEFORE the
+// AI API call — fixing the TOCTOU where 10 concurrent requests could all
+// pass the check before any audit log was written.
 
 export async function checkAIRateLimit(
   supabase: SupabaseClient,
   tenantId: string,
 ): Promise<RateLimitResult> {
-  const { count, error } = await supabase
-    .from("audit_logs")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("action_type", "ERP_AI_FIELD_MAPPING")
-    .gte("created_at", new Date(Date.now() - WINDOW_1H_MS).toISOString());
+  const { data, error } = await supabase.rpc(
+    "rpc_check_ai_rate_limit",
+    { p_tenant_id: tenantId },
+  );
 
-  if (!error && (count ?? 0) >= AI_HOURLY_MAX) {
-    return { allowed: false, retryAfter: 3600 };
+  if (error) {
+    console.error("[rate-limit] AI rate limit RPC failed:", error.message);
+    return { allowed: true }; // Fail open on DB errors
   }
 
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.allowed) {
+    return { allowed: false, retryAfter: row?.retry_after_secs ?? 3600 };
+  }
   return { allowed: true };
 }
 
@@ -237,10 +232,12 @@ export async function recordIdempotencyKey(
   key: string,
   tenantId: string,
 ): Promise<void> {
-  // Ignore insert-conflict; a concurrent request may have raced us.
+  // onConflict targets the composite PK (tenant_id, key) introduced in
+  // migration 20260223 — each tenant has its own key namespace and a
+  // cross-tenant upsert can no longer stomp another tenant's record.
   await supabase
     .from("erp_idempotency_keys")
-    .upsert({ key, tenant_id: tenantId }, { onConflict: "key" });
+    .upsert({ key, tenant_id: tenantId }, { onConflict: "tenant_id,key" });
 }
 
 // ─── Audit logging ─────────────────────────────────────────────────────────────

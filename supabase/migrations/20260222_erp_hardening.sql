@@ -91,15 +91,27 @@ BEGIN
 END $$;
 
 -- Tenant admins may read their own audit trail
-CREATE POLICY IF NOT EXISTS "Tenant admins can view their audit logs"
-  ON public.audit_logs FOR SELECT
-  USING (
-    tenant_id = get_user_tenant_id(auth.uid())
-    AND (
-      has_role(auth.uid(), 'tenant_admin'::app_role)
-      OR is_super_admin(auth.uid())
-    )
-  );
+-- NOTE: CREATE POLICY IF NOT EXISTS is not valid PostgreSQL syntax;
+--       wrap in a DO block with a pg_policies existence check.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'audit_logs'
+      AND policyname = 'Tenant admins can view their audit logs'
+  ) THEN
+    CREATE POLICY "Tenant admins can view their audit logs"
+      ON public.audit_logs FOR SELECT
+      USING (
+        tenant_id = get_user_tenant_id(auth.uid())
+        AND (
+          has_role(auth.uid(), 'tenant_admin'::app_role)
+          OR is_super_admin(auth.uid())
+        )
+      );
+  END IF;
+END $$;
 
 
 -- ──────────────────────────────────────────────────────────────
