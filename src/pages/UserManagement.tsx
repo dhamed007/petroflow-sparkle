@@ -152,7 +152,20 @@ export default function UserManagement() {
 
   const handleRemoveRole = async (userId: string, role: string) => {
     if (!tenantId) return;
-    
+
+    // Prevent removing tenant_admin from self if sole admin
+    if (role === 'tenant_admin' && userId === user?.id) {
+      const adminCount = users.filter((u) => u.roles.includes('tenant_admin')).length;
+      if (adminCount <= 1) {
+        toast({
+          title: 'Cannot remove last admin',
+          description: 'You are the sole administrator. Assign another admin before removing your own role.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     if (!confirm(`Are you sure you want to remove the ${role} role?`)) return;
 
     try {

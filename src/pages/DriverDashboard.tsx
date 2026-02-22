@@ -7,9 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import DashboardNav from '@/components/DashboardNav';
-import { Truck, MapPin, Package, CheckCircle, Clock, Navigation, WifiOff } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Truck, MapPin, Package, CheckCircle, Clock, Navigation, WifiOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useGPSTracking } from '@/hooks/useGPSTracking';
+
+type AssignedTruck = { id: string; plate_number: string };
 
 export default function DriverDashboard() {
   const { user } = useAuth();
@@ -18,10 +21,32 @@ export default function DriverDashboard() {
   const { toast } = useToast();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [assignedTruck, setAssignedTruck] = useState<AssignedTruck | null>(null);
+  const [truckStatus, setTruckStatus] = useState<'loading' | 'ok' | 'none' | 'multiple'>('loading');
+
+  // Fetch truck assigned to this driver on mount
+  useEffect(() => {
+    const fetchTruck = async () => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('trucks')
+        .select('id, plate_number')
+        .eq('driver_id', user.id);
+
+      if (error || !data || data.length === 0) {
+        setTruckStatus('none');
+      } else if (data.length > 1) {
+        setTruckStatus('multiple');
+      } else {
+        setAssignedTruck(data[0]);
+        setTruckStatus('ok');
+      }
+    };
+    fetchTruck();
+  }, [user]);
 
   const handleGPSUpdate = useCallback(async (position: { lat: number; lng: number; accuracy: number; timestamp: number }) => {
-    if (!user) return;
-    // Find the truck assigned to this driver and update its location
+    if (!user || !assignedTruck) return;
     const updateData: Record<string, unknown> = {
       last_location: {
         lat: position.lat,
@@ -35,10 +60,10 @@ export default function DriverDashboard() {
     const { error } = await supabase
       .from('trucks')
       .update(updateData as any)
-      .eq('driver_id', user.id);
+      .eq('id', assignedTruck.id);
 
     if (error) console.error('GPS update error:', error);
-  }, [user]);
+  }, [user, assignedTruck]);
 
   const gps = useGPSTracking({
     onPositionUpdate: handleGPSUpdate,
@@ -212,12 +237,33 @@ export default function DriverDashboard() {
           </Card>
         </div>
 
+        {/* Truck assignment warnings */}
+        {truckStatus === 'none' && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              No truck assigned to your account. Contact your administrator to assign a truck before sharing GPS location.
+            </AlertDescription>
+          </Alert>
+        )}
+        {truckStatus === 'multiple' && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Multiple trucks are assigned to your account ({assignedTruck?.plate_number}). Contact your administrator to resolve this before sharing GPS location.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* GPS Tracking Card */}
         <Card className="mb-6">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Navigation className="h-4 w-4" />
               GPS Location Sharing
+              {assignedTruck && (
+                <span className="text-muted-foreground font-normal">— {assignedTruck.plate_number}</span>
+              )}
             </CardTitle>
             {gps.isOffline && (
               <Badge variant="outline" className="text-yellow-600">
@@ -231,6 +277,7 @@ export default function DriverDashboard() {
               <Button
                 variant={gps.isTracking ? "default" : "outline"}
                 onClick={gps.isTracking ? gps.stopTracking : gps.startTracking}
+                disabled={truckStatus !== 'ok'}
               >
                 <Navigation className="h-4 w-4 mr-2" />
                 {gps.isTracking ? 'Stop Sharing' : 'Start Sharing Location'}

@@ -1,4 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const Orders = () => {
   const { user } = useAuth();
+  const { hasAnyRole } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
@@ -183,7 +185,7 @@ const Orders = () => {
                   onEdit={() => handleEditOrder(order)}
                   onDelete={() => handleDeleteClick(order.id)}
                 />
-                {order.status === 'pending' && (
+                {order.status === 'pending' && hasAnyRole('tenant_admin', 'dispatch_officer', 'sales_manager', 'super_admin') && (
                   <Button
                     size="sm"
                     variant="outline"

@@ -58,8 +58,8 @@ const App = () => (
               <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
               <Route path="/driver" element={<AuthGuard><RoleGuard allowedRoles={['driver']}><DriverDashboard /></RoleGuard></AuthGuard>} />
               <Route path="/client" element={<AuthGuard><RoleGuard allowedRoles={['client']}><ClientDashboard /></RoleGuard></AuthGuard>} />
-              <Route path="/orders" element={<AuthGuard><Orders /></AuthGuard>} />
-              <Route path="/deliveries" element={<AuthGuard><Deliveries /></AuthGuard>} />
+              <Route path="/orders" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'sales_manager', 'sales_rep', 'dispatch_officer', 'super_admin']}><Orders /></RoleGuard></AuthGuard>} />
+              <Route path="/deliveries" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'sales_manager', 'sales_rep', 'dispatch_officer', 'client', 'super_admin']}><Deliveries /></RoleGuard></AuthGuard>} />
               <Route path="/inventory" element={<AuthGuard><Inventory /></AuthGuard>} />
               <Route path="/invoices" element={<AuthGuard><Invoices /></AuthGuard>} />
               <Route path="/fleet" element={<AuthGuard><RoleGuard allowedRoles={['tenant_admin', 'dispatch_officer', 'super_admin']}><Fleet /></RoleGuard></AuthGuard>} />

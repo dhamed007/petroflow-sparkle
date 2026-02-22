@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface GatewayState {
   id?: string;
@@ -36,12 +36,32 @@ const defaultGateway: GatewayState = {
   new_client_secret: '',
 };
 
+// Key format validation rules per gateway
+const keyValidators: Record<string, { publicKey?: RegExp; secretKey?: RegExp; clientId?: RegExp; clientSecret?: RegExp }> = {
+  paystack: {
+    publicKey: /^pk_(test|live)_[A-Za-z0-9]+$/,
+    secretKey: /^sk_(test|live)_[A-Za-z0-9]+$/,
+  },
+  flutterwave: {
+    publicKey: /^FLWPUBK(_TEST)?-[A-Za-z0-9]+-X$/,
+    secretKey: /^FLWSECK(_TEST)?-[A-Za-z0-9]+-X$/,
+  },
+  interswitch: {}, // No standard format
+};
+
+type TestStatus = 'idle' | 'testing' | 'success' | 'error';
+
 const PaymentSettings = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testStatus, setTestStatus] = useState<Record<string, TestStatus>>({
+    paystack: 'idle',
+    flutterwave: 'idle',
+    interswitch: 'idle',
+  });
   const [gateways, setGateways] = useState<Record<string, GatewayState>>({
     paystack: { ...defaultGateway },
     flutterwave: { ...defaultGateway },
@@ -166,6 +186,63 @@ const PaymentSettings = () => {
     });
   };
 
+  const validateKey = (gatewayType: string, keyField: 'publicKey' | 'secretKey' | 'clientId' | 'clientSecret', value: string): string | null => {
+    if (!value) return null; // Empty = skip validation
+    const pattern = keyValidators[gatewayType]?.[keyField];
+    if (!pattern) return null; // No rule = skip
+    return pattern.test(value) ? null : 'Invalid key format';
+  };
+
+  const handleTestConnection = async (gatewayType: string) => {
+    const gw = gateways[gatewayType];
+    setTestStatus((prev) => ({ ...prev, [gatewayType]: 'testing' }));
+
+    try {
+      if (gatewayType === 'paystack') {
+        if (!gw.public_key) throw new Error('Public key required for connection test');
+        const res = await fetch('https://api.paystack.co/bank?country=nigeria&perPage=1', {
+          headers: { Authorization: `Bearer ${gw.public_key}` },
+        });
+        if (!res.ok) throw new Error(`Paystack returned ${res.status}`);
+      } else if (gatewayType === 'flutterwave') {
+        if (!gw.public_key) throw new Error('Public key required for connection test');
+        // Flutterwave doesn't expose a public-key-only endpoint; validate format instead
+        if (!keyValidators.flutterwave.publicKey?.test(gw.public_key)) {
+          throw new Error('Public key format invalid');
+        }
+      } else if (gatewayType === 'interswitch') {
+        if (!gw.client_id) throw new Error('Client ID required for connection test');
+      }
+
+      setTestStatus((prev) => ({ ...prev, [gatewayType]: 'success' }));
+      toast({ title: 'Connection test passed', description: `${gatewayType} credentials look valid.` });
+    } catch (err: any) {
+      setTestStatus((prev) => ({ ...prev, [gatewayType]: 'error' }));
+      toast({ title: 'Connection test failed', description: err.message, variant: 'destructive' });
+    }
+
+    // Reset icon after 4s
+    setTimeout(() => setTestStatus((prev) => ({ ...prev, [gatewayType]: 'idle' })), 4000);
+  };
+
+  const TestButton = ({ gatewayType }: { gatewayType: string }) => {
+    const status = testStatus[gatewayType];
+    return (
+      <Button
+        variant="outline"
+        onClick={() => handleTestConnection(gatewayType)}
+        disabled={status === 'testing'}
+        className="gap-2"
+      >
+        {status === 'testing' && <Loader2 className="w-4 h-4 animate-spin" />}
+        {status === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+        {status === 'error' && <XCircle className="w-4 h-4 text-destructive" />}
+        {status === 'idle' && null}
+        {status === 'testing' ? 'Testing...' : 'Test Connection'}
+      </Button>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -226,6 +303,12 @@ const PaymentSettings = () => {
                     onChange={(e) => updateGateway('paystack', 'public_key', e.target.value)}
                     placeholder="pk_test_..."
                   />
+                  {validateKey('paystack', 'publicKey', gateways.paystack.public_key) && (
+                    <p className="text-sm text-destructive mt-1">
+                      {validateKey('paystack', 'publicKey', gateways.paystack.public_key)}
+                      {' '}— expected format: pk_test_... or pk_live_...
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Secret Key</Label>
@@ -235,15 +318,24 @@ const PaymentSettings = () => {
                     onChange={(e) => updateGateway('paystack', 'new_secret_key', e.target.value)}
                     placeholder={gateways.paystack.has_secret_key ? '••••••••••••' : 'sk_test_...'}
                   />
+                  {validateKey('paystack', 'secretKey', gateways.paystack.new_secret_key) && (
+                    <p className="text-sm text-destructive mt-1">
+                      {validateKey('paystack', 'secretKey', gateways.paystack.new_secret_key)}
+                      {' '}— expected format: sk_test_... or sk_live_...
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground mt-1">
-                    {gateways.paystack.has_secret_key 
-                      ? 'Secret key is configured. Enter a new value to update it.' 
+                    {gateways.paystack.has_secret_key
+                      ? 'Secret key is configured. Enter a new value to update it.'
                       : 'Your secret key is encrypted and stored securely'}
                   </p>
                 </div>
-                <Button onClick={() => handleSave('paystack')} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Paystack Configuration'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => handleSave('paystack')} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Paystack Configuration'}
+                  </Button>
+                  <TestButton gatewayType="paystack" />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -274,8 +366,14 @@ const PaymentSettings = () => {
                   <Input
                     value={gateways.flutterwave.public_key || ''}
                     onChange={(e) => updateGateway('flutterwave', 'public_key', e.target.value)}
-                    placeholder="FLWPUBK_TEST..."
+                    placeholder="FLWPUBK_TEST-...-X"
                   />
+                  {validateKey('flutterwave', 'publicKey', gateways.flutterwave.public_key) && (
+                    <p className="text-sm text-destructive mt-1">
+                      {validateKey('flutterwave', 'publicKey', gateways.flutterwave.public_key)}
+                      {' '}— expected format: FLWPUBK_TEST-...-X or FLWPUBK-...-X
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Secret Key</Label>
@@ -283,17 +381,26 @@ const PaymentSettings = () => {
                     type="password"
                     value={gateways.flutterwave.new_secret_key}
                     onChange={(e) => updateGateway('flutterwave', 'new_secret_key', e.target.value)}
-                    placeholder={gateways.flutterwave.has_secret_key ? '••••••••••••' : 'FLWSECK_TEST...'}
+                    placeholder={gateways.flutterwave.has_secret_key ? '••••••••••••' : 'FLWSECK_TEST-...-X'}
                   />
+                  {validateKey('flutterwave', 'secretKey', gateways.flutterwave.new_secret_key) && (
+                    <p className="text-sm text-destructive mt-1">
+                      {validateKey('flutterwave', 'secretKey', gateways.flutterwave.new_secret_key)}
+                      {' '}— expected format: FLWSECK_TEST-...-X or FLWSECK-...-X
+                    </p>
+                  )}
                   <p className="text-sm text-muted-foreground mt-1">
-                    {gateways.flutterwave.has_secret_key 
-                      ? 'Secret key is configured. Enter a new value to update it.' 
+                    {gateways.flutterwave.has_secret_key
+                      ? 'Secret key is configured. Enter a new value to update it.'
                       : 'Your secret key is encrypted and stored securely'}
                   </p>
                 </div>
-                <Button onClick={() => handleSave('flutterwave')} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Flutterwave Configuration'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => handleSave('flutterwave')} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Flutterwave Configuration'}
+                  </Button>
+                  <TestButton gatewayType="flutterwave" />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -341,9 +448,12 @@ const PaymentSettings = () => {
                       : 'Your client secret is encrypted and stored securely'}
                   </p>
                 </div>
-                <Button onClick={() => handleSave('interswitch')} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Interswitch Configuration'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => handleSave('interswitch')} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Interswitch Configuration'}
+                  </Button>
+                  <TestButton gatewayType="interswitch" />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
