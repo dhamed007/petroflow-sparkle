@@ -1,14 +1,34 @@
+/**
+ * erp-refresh-token/index.ts
+ *
+ * Enterprise-hardened OAuth token refresh endpoint.
+ *
+ * Security controls applied:
+ *  1. Server-side role enforcement (tenant_admin | super_admin)
+ *     — service-role key accepted for internal calls from erp-sync
+ *  2. Cross-tenant ownership guard (integration must belong to caller's tenant)
+ *  3. 15-second timeout on upstream OAuth token endpoints
+ *  4. Audit log on credential update
+ *  5. Error sanitiser — OAuth secrets never leak to caller
+ *  6. Standard { success, message, rateLimited, timestamp } response
+ */
+
+// deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import {
+  CORS_HEADERS,
+  erpResponse,
+  erpError,
+  verifyERPAuth,
+  insertAuditLog,
+  fetchWithTimeout,
+  sanitizeError,
+} from "../_shared/erp-auth.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: CORS_HEADERS });
   }
 
   try {
@@ -16,22 +36,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("No authorization header");
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-
-    if (authError || !user) {
-      throw new Error("Unauthorized");
-    }
+    // ── 1. Auth + role enforcement ─────────────────────────────────────────
+    // allowSystemKey: true — erp-sync calls this internally with service-role key
+    const auth = await verifyERPAuth(req, supabase, { allowSystemKey: true });
 
     const { integration_id } = await req.json();
+    if (!integration_id) {
+      return erpError("Missing required field: integration_id", 400);
+    }
 
-    // Get integration details
+    // ── 2. Fetch integration ───────────────────────────────────────────────
     const { data: integration, error: integrationError } = await supabase
       .from("erp_integrations")
       .select("*")
@@ -39,44 +53,64 @@ serve(async (req) => {
       .single();
 
     if (integrationError || !integration) {
-      throw new Error("Integration not found");
+      return erpError("Integration not found", 404);
     }
 
-    // Check if token needs refresh
-    const now = new Date();
-    const expiresAt = integration.token_expires_at ? new Date(integration.token_expires_at) : null;
-    
-    if (!expiresAt || now < expiresAt) {
-      return new Response(JSON.stringify({
-        success: true,
-        message: "Token is still valid",
-        expires_at: expiresAt,
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // ── 3. Cross-tenant ownership guard (skip for system calls) ───────────
+    if (!auth.isSystem && integration.tenant_id !== auth.tenantId) {
+      return erpError("Forbidden: integration does not belong to your tenant", 403);
+    }
+
+    const tenantId: string = auth.isSystem ? integration.tenant_id : auth.tenantId;
+
+    // ── 4. Check if token actually needs refresh ───────────────────────────
+    const expiresAt = integration.token_expires_at
+      ? new Date(integration.token_expires_at)
+      : null;
+
+    if (!expiresAt || new Date() < expiresAt) {
+      return erpResponse(true, "Token is still valid", {
+        expires_at: expiresAt?.toISOString() ?? null,
       });
     }
 
-    // Refresh token based on ERP system
-    let refreshResult;
+    // ── 5. Perform refresh with 15-second timeout ──────────────────────────
+    let refreshResult: {
+      success: boolean;
+      access_token?: string;
+      refresh_token?: string;
+      expires_at?: string;
+      error?: string;
+    };
+
     switch (integration.erp_system) {
-      case 'quickbooks':
+      case "quickbooks":
         refreshResult = await refreshQuickBooksToken(integration);
         break;
-      case 'dynamics365':
+      case "dynamics365":
         refreshResult = await refreshDynamics365Token(integration);
         break;
-      case 'custom_api':
+      case "custom_api":
         refreshResult = await refreshCustomAPIToken(integration);
         break;
       default:
-        throw new Error(`Token refresh not supported for ${integration.erp_system}`);
+        return erpError(
+          `Token refresh not supported for ${integration.erp_system}`,
+          400,
+        );
     }
 
     if (!refreshResult.success) {
-      throw new Error(refreshResult.error || "Token refresh failed");
+      // Audit failure without exposing the error detail
+      await insertAuditLog(supabase, tenantId, auth.isSystem ? null : auth.userId, "ERP_TOKEN_REFRESH", {
+        integration_id,
+        erp_system: integration.erp_system,
+        status: "failed",
+      });
+      return erpError("Token refresh failed. Re-connect the integration.", 400);
     }
 
-    // Update integration with new tokens
+    // ── 6. Persist new tokens ──────────────────────────────────────────────
     const { error: updateError } = await supabase
       .from("erp_integrations")
       .update({
@@ -87,46 +121,51 @@ serve(async (req) => {
       })
       .eq("id", integration_id);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      throw new Error("Failed to persist refreshed tokens");
+    }
 
-    console.log(`Token refreshed successfully for integration ${integration_id}`);
-
-    return new Response(JSON.stringify({
-      success: true,
-      message: "Token refreshed successfully",
+    // ── 7. Audit log (success) ─────────────────────────────────────────────
+    await insertAuditLog(supabase, tenantId, auth.isSystem ? null : auth.userId, "ERP_TOKEN_REFRESH", {
+      integration_id,
+      erp_system: integration.erp_system,
+      status: "success",
       expires_at: refreshResult.expires_at,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+    return erpResponse(true, "Token refreshed successfully", {
+      expires_at: refreshResult.expires_at,
     });
   } catch (error: any) {
-    console.error("Token refresh error:", error);
-    return new Response(JSON.stringify({ 
-      success: false,
-      error: error.message 
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
-    });
+    const status: number = typeof error.status === "number" ? error.status : 400;
+    console.error("[erp-refresh-token] error:", error.message);
+    return erpError(sanitizeError(error), status);
   }
 });
 
+// ─── OAuth refresh implementations (15-second timeout) ────────────────────────
+
 async function refreshQuickBooksToken(integration: any) {
   try {
-    const oauth_config = integration.oauth_config || {};
-    const tokenUrl = oauth_config.token_url || "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
-    
-    const credentials = integration.credentials_encrypted || {};
-    const refreshToken = integration.refresh_token_encrypted || credentials.refresh_token;
+    const oauthConfig = integration.oauth_config ?? {};
+    const tokenUrl =
+      oauthConfig.token_url ??
+      "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+    const refreshToken =
+      integration.refresh_token_encrypted ??
+      integration.credentials_encrypted?.refresh_token;
 
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
     }
 
-    const response = await fetch(tokenUrl, {
+    const response = await fetchWithTimeout(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${btoa(`${oauth_config.client_id}:${oauth_config.client_secret}`)}`,
+        Authorization: `Basic ${btoa(
+          `${oauthConfig.client_id}:${oauthConfig.client_secret}`
+        )}`,
       },
       body: new URLSearchParams({
         grant_type: "refresh_token",
@@ -135,111 +174,98 @@ async function refreshQuickBooksToken(integration: any) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `QuickBooks token refresh failed: ${errorText}` };
+      return { success: false, error: "QuickBooks token refresh rejected" };
     }
 
     const data = await response.json();
-    const expiresAt = new Date(Date.now() + (data.expires_in * 1000));
-
     return {
       success: true,
       access_token: data.access_token,
-      refresh_token: data.refresh_token || refreshToken,
-      expires_at: expiresAt.toISOString(),
+      refresh_token: data.refresh_token ?? refreshToken,
+      expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
     };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "QuickBooks token refresh timed out" };
   }
 }
 
 async function refreshDynamics365Token(integration: any) {
   try {
-    const oauth_config = integration.oauth_config || {};
-    const tokenUrl = oauth_config.token_url || `https://login.microsoftonline.com/${oauth_config.tenant_id}/oauth2/v2.0/token`;
-    
+    const oauthConfig = integration.oauth_config ?? {};
+    const tokenUrl =
+      oauthConfig.token_url ??
+      `https://login.microsoftonline.com/${oauthConfig.tenant_id}/oauth2/v2.0/token`;
     const refreshToken = integration.refresh_token_encrypted;
 
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
     }
 
-    const response = await fetch(tokenUrl, {
+    const response = await fetchWithTimeout(tokenUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: oauth_config.client_id,
-        client_secret: oauth_config.client_secret,
+        client_id: oauthConfig.client_id,
+        client_secret: oauthConfig.client_secret,
         grant_type: "refresh_token",
         refresh_token: refreshToken,
-        scope: oauth_config.scope || "https://org.crm.dynamics.com/.default",
+        scope: oauthConfig.scope ?? "https://org.crm.dynamics.com/.default",
       }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Dynamics 365 token refresh failed: ${errorText}` };
+      return { success: false, error: "Dynamics 365 token refresh rejected" };
     }
 
     const data = await response.json();
-    const expiresAt = new Date(Date.now() + (data.expires_in * 1000));
-
     return {
       success: true,
       access_token: data.access_token,
-      refresh_token: data.refresh_token || refreshToken,
-      expires_at: expiresAt.toISOString(),
+      refresh_token: data.refresh_token ?? refreshToken,
+      expires_at: new Date(Date.now() + data.expires_in * 1000).toISOString(),
     };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Dynamics 365 token refresh timed out" };
   }
 }
 
 async function refreshCustomAPIToken(integration: any) {
   try {
-    const oauth_config = integration.oauth_config || {};
-    const tokenUrl = oauth_config.token_url;
-    
+    const oauthConfig = integration.oauth_config ?? {};
+    const tokenUrl = oauthConfig.token_url;
+
     if (!tokenUrl) {
       return { success: false, error: "No token refresh URL configured" };
     }
 
     const refreshToken = integration.refresh_token_encrypted;
-
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
     }
 
-    const response = await fetch(tokenUrl, {
+    const response = await fetchWithTimeout(tokenUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         grant_type: "refresh_token",
         refresh_token: refreshToken,
-        client_id: oauth_config.client_id,
-        client_secret: oauth_config.client_secret,
+        client_id: oauthConfig.client_id,
+        client_secret: oauthConfig.client_secret,
       }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Token refresh failed: ${errorText}` };
+      return { success: false, error: "Custom API token refresh rejected" };
     }
 
     const data = await response.json();
-    const expiresAt = new Date(Date.now() + ((data.expires_in || 3600) * 1000));
-
     return {
       success: true,
       access_token: data.access_token,
-      refresh_token: data.refresh_token || refreshToken,
-      expires_at: expiresAt.toISOString(),
+      refresh_token: data.refresh_token ?? refreshToken,
+      expires_at: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
     };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Custom API token refresh timed out" };
   }
 }

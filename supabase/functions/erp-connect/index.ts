@@ -1,10 +1,33 @@
+/**
+ * erp-connect/index.ts
+ *
+ * Enterprise-hardened ERP connection endpoint.
+ *
+ * Security controls applied:
+ *  1. Server-side role enforcement (tenant_admin | super_admin only)
+ *  2. Idempotency key (optional — uses natural DB upsert as fallback)
+ *  3. Cross-tenant protection: tenant_id ALWAYS from auth user profile
+ *  4. 15-second timeout on external ERP connection tests
+ *  5. Audit log on connect (success + failure)
+ *  6. Sanitized response — credentials/tokens never returned to caller
+ *  7. Error sanitiser — internal details never leak
+ *  8. Standard { success, message, rateLimited, timestamp } response
+ */
+
+// deno-lint-ignore-file no-explicit-any
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import {
+  CORS_HEADERS,
+  erpResponse,
+  erpError,
+  verifyERPAuth,
+  checkIdempotencyKey,
+  recordIdempotencyKey,
+  insertAuditLog,
+  fetchWithTimeout,
+  sanitizeError,
+} from "../_shared/erp-auth.ts";
 
 interface ERPConnectRequest {
   erp_system: string;
@@ -17,7 +40,7 @@ interface ERPConnectRequest {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: CORS_HEADERS });
   }
 
   try {
@@ -25,177 +48,178 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("No authorization header");
-    }
+    // ── 1. Auth + role enforcement ─────────────────────────────────────────
+    // No service-role bypass — erp-connect is user-only
+    const auth = await verifyERPAuth(req, supabase, { allowSystemKey: false });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", "")
-    );
-
-    if (authError || !user) {
-      throw new Error("Unauthorized");
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("tenant_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.tenant_id) {
-      throw new Error("No tenant found");
+    // ── 2. Idempotency (optional header) ──────────────────────────────────
+    const idempotencyKey = req.headers.get("Idempotency-Key");
+    if (idempotencyKey) {
+      const alreadySeen = await checkIdempotencyKey(supabase, idempotencyKey, auth.tenantId);
+      if (alreadySeen) {
+        return erpResponse(true, "Duplicate request — connection already established");
+      }
     }
 
     const connectRequest: ERPConnectRequest = await req.json();
 
-    // Test connection based on ERP system
-    let connectionTest;
+    if (!connectRequest.erp_system || !connectRequest.name || !connectRequest.credentials) {
+      return erpError("Missing required fields: erp_system, name, credentials", 400);
+    }
+
+    // ── 3. Test connection (15-second timeout on external HTTP) ───────────
+    let connectionTest: { success: boolean; error?: string; entities?: any };
     switch (connectRequest.erp_system) {
-      case 'odoo':
+      case "odoo":
         connectionTest = await testOdooConnection(connectRequest);
         break;
-      case 'sap':
+      case "sap":
         connectionTest = await testSAPConnection(connectRequest);
         break;
-      case 'quickbooks':
+      case "quickbooks":
         connectionTest = await testQuickBooksConnection(connectRequest);
         break;
-      case 'sage':
+      case "sage":
         connectionTest = await testSageConnection(connectRequest);
         break;
-      case 'dynamics365':
+      case "dynamics365":
         connectionTest = await testDynamics365Connection(connectRequest);
         break;
-      case 'custom_api':
+      case "custom_api":
         connectionTest = await testCustomAPIConnection(connectRequest);
         break;
       default:
-        throw new Error("Unsupported ERP system");
+        return erpError(`Unsupported ERP system: ${connectRequest.erp_system}`, 400);
     }
 
     if (!connectionTest.success) {
-      return new Response(JSON.stringify({
-        success: false,
-        error: connectionTest.error,
-        message: "Connection test failed"
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
+      // Audit the failure — do NOT forward connectionTest.error to caller
+      await insertAuditLog(supabase, auth.tenantId, auth.userId, "ERP_CONNECT", {
+        erp_system: connectRequest.erp_system,
+        status: "connection_failed",
       });
+
+      return erpResponse(false, "Connection test failed — check credentials and endpoint", {}, 400);
     }
 
-    // Extract token information if available
+    // ── 4. Extract token data ──────────────────────────────────────────────
     const tokenData = extractTokenData(connectRequest, connectionTest);
 
-    // Save integration
+    // ── 5. Save integration (tenant_id from auth profile — never from body) ─
     const { data: integration, error: integrationError } = await supabase
       .from("erp_integrations")
-      .upsert({
-        tenant_id: profile.tenant_id,
-        erp_system: connectRequest.erp_system,
-        name: connectRequest.name,
-        is_sandbox: connectRequest.is_sandbox,
-        credentials_encrypted: connectRequest.credentials,
-        api_endpoint: connectRequest.api_endpoint,
-        api_version: connectRequest.api_version,
-        connection_status: 'connected',
-        last_test_at: new Date().toISOString(),
-        is_active: true,
-        // Token management fields
-        access_token_encrypted: tokenData.access_token,
-        refresh_token_encrypted: tokenData.refresh_token,
-        token_expires_at: tokenData.expires_at,
-        token_type: tokenData.token_type,
-        oauth_config: tokenData.oauth_config,
-      }, {
-        onConflict: 'tenant_id,erp_system'
-      })
-      .select()
+      .upsert(
+        {
+          tenant_id: auth.tenantId,   // ← always from auth, never from request
+          erp_system: connectRequest.erp_system,
+          name: connectRequest.name,
+          is_sandbox: connectRequest.is_sandbox,
+          credentials_encrypted: connectRequest.credentials,
+          api_endpoint: connectRequest.api_endpoint,
+          api_version: connectRequest.api_version,
+          connection_status: "connected",
+          last_test_at: new Date().toISOString(),
+          is_active: true,
+          access_token_encrypted: tokenData.access_token,
+          refresh_token_encrypted: tokenData.refresh_token,
+          token_expires_at: tokenData.expires_at,
+          token_type: tokenData.token_type,
+          oauth_config: tokenData.oauth_config,
+        },
+        { onConflict: "tenant_id,erp_system" },
+      )
+      .select("id, erp_system, name, is_sandbox, connection_status, last_test_at, is_active, created_at, updated_at")
       .single();
 
-    if (integrationError) throw integrationError;
+    if (integrationError) {
+      throw new Error("Failed to save integration");
+    }
 
-    // Create default entities
+    // ── 6. Create default entity stubs ─────────────────────────────────────
     const defaultEntities = [
-      { entity_type: 'orders', erp_entity_name: connectionTest.entities?.orders },
-      { entity_type: 'customers', erp_entity_name: connectionTest.entities?.customers },
-      { entity_type: 'products', erp_entity_name: connectionTest.entities?.products },
-      { entity_type: 'invoices', erp_entity_name: connectionTest.entities?.invoices },
-      { entity_type: 'payments', erp_entity_name: connectionTest.entities?.payments },
+      { entity_type: "orders",    erp_entity_name: connectionTest.entities?.orders },
+      { entity_type: "customers", erp_entity_name: connectionTest.entities?.customers },
+      { entity_type: "products",  erp_entity_name: connectionTest.entities?.products },
+      { entity_type: "invoices",  erp_entity_name: connectionTest.entities?.invoices },
+      { entity_type: "payments",  erp_entity_name: connectionTest.entities?.payments },
     ];
 
     for (const entity of defaultEntities) {
       if (entity.erp_entity_name) {
-        await supabase.from("erp_entities").upsert({
-          integration_id: integration.id,
-          entity_type: entity.entity_type,
-          erp_entity_name: entity.erp_entity_name,
-          is_enabled: true,
-        }, {
-          onConflict: 'integration_id,entity_type'
-        });
+        await supabase.from("erp_entities").upsert(
+          {
+            integration_id: integration.id,
+            entity_type: entity.entity_type,
+            erp_entity_name: entity.erp_entity_name,
+            is_enabled: true,
+          },
+          { onConflict: "integration_id,entity_type" },
+        );
       }
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      integration,
-      message: "ERP connected successfully"
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+    // ── 7. Audit log (success) ─────────────────────────────────────────────
+    await insertAuditLog(supabase, auth.tenantId, auth.userId, "ERP_CONNECT", {
+      erp_system: connectRequest.erp_system,
+      integration_id: integration.id,
+      status: "success",
     });
+
+    // Record idempotency key after confirmed success
+    if (idempotencyKey) {
+      await recordIdempotencyKey(supabase, idempotencyKey, auth.tenantId);
+    }
+
+    // ── 8. Return sanitized integration (NO credentials/tokens) ───────────
+    return erpResponse(true, "ERP connected successfully", { integration });
   } catch (error: any) {
-    console.error("ERP connection error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
-    });
+    const status: number = typeof error.status === "number" ? error.status : 400;
+    console.error("[erp-connect] error:", error.message);
+    return erpError(sanitizeError(error), status);
   }
 });
 
+// ─── Connection test helpers (15-second timeout) ──────────────────────────────
+
 async function testOdooConnection(config: ERPConnectRequest) {
   try {
-    const response = await fetch(`${config.api_endpoint}/web/session/authenticate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        params: {
-          db: config.credentials.database,
-          login: config.credentials.username,
-          password: config.credentials.password,
-        }
-      }),
-    });
-
+    const response = await fetchWithTimeout(
+      `${config.api_endpoint}/web/session/authenticate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          params: {
+            db: config.credentials.database,
+            login: config.credentials.username,
+            password: config.credentials.password,
+          },
+        }),
+      },
+    );
     const data = await response.json();
-    
-    if (data.result && data.result.uid) {
+    if (data.result?.uid) {
       return {
         success: true,
         entities: {
-          orders: 'sale.order',
-          customers: 'res.partner',
-          products: 'product.product',
-          invoices: 'account.move',
-          payments: 'account.payment',
-        }
+          orders: "sale.order",
+          customers: "res.partner",
+          products: "product.product",
+          invoices: "account.move",
+          payments: "account.payment",
+        },
       };
     }
-    
-    return { success: false, error: "Authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: "Odoo authentication failed" };
+  } catch {
+    return { success: false, error: "Odoo connection timed out or unreachable" };
   }
 }
 
 async function testSAPConnection(config: ERPConnectRequest) {
-  // SAP B1 Service Layer test
   try {
-    const response = await fetch(`${config.api_endpoint}/Login`, {
+    const response = await fetchWithTimeout(`${config.api_endpoint}/Login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -204,154 +228,150 @@ async function testSAPConnection(config: ERPConnectRequest) {
         Password: config.credentials.password,
       }),
     });
-
     if (response.ok) {
       return {
         success: true,
         entities: {
-          orders: 'Orders',
-          customers: 'BusinessPartners',
-          products: 'Items',
-          invoices: 'Invoices',
-          payments: 'IncomingPayments',
-        }
+          orders: "Orders",
+          customers: "BusinessPartners",
+          products: "Items",
+          invoices: "Invoices",
+          payments: "IncomingPayments",
+        },
       };
     }
-    
     return { success: false, error: "SAP authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "SAP connection timed out or unreachable" };
   }
 }
 
 async function testQuickBooksConnection(config: ERPConnectRequest) {
-  // QuickBooks OAuth test
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${config.api_endpoint}/v3/company/${config.credentials.realm_id}/companyinfo/${config.credentials.realm_id}`,
       {
         headers: {
-          "Authorization": `Bearer ${config.credentials.access_token}`,
-          "Accept": "application/json",
+          Authorization: `Bearer ${config.credentials.access_token}`,
+          Accept: "application/json",
         },
-      }
+      },
     );
-
     if (response.ok) {
       return {
         success: true,
         entities: {
-          orders: 'SalesOrder',
-          customers: 'Customer',
-          products: 'Item',
-          invoices: 'Invoice',
-          payments: 'Payment',
-        }
+          orders: "SalesOrder",
+          customers: "Customer",
+          products: "Item",
+          invoices: "Invoice",
+          payments: "Payment",
+        },
       };
     }
-    
     return { success: false, error: "QuickBooks authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "QuickBooks connection timed out or unreachable" };
   }
 }
 
 async function testSageConnection(config: ERPConnectRequest) {
   try {
-    const response = await fetch(`${config.api_endpoint}/sdata/accounts50/GCRM/-/`, {
-      headers: {
-        "Authorization": `Basic ${btoa(config.credentials.username + ':' + config.credentials.password)}`,
+    const response = await fetchWithTimeout(
+      `${config.api_endpoint}/sdata/accounts50/GCRM/-/`,
+      {
+        headers: {
+          Authorization: `Basic ${btoa(
+            config.credentials.username + ":" + config.credentials.password
+          )}`,
+        },
       },
-    });
-
+    );
     if (response.ok) {
       return {
         success: true,
         entities: {
-          orders: 'SalesOrders',
-          customers: 'Customers',
-          products: 'Commodities',
-          invoices: 'SalesInvoices',
-          payments: 'CustomerPayments',
-        }
+          orders: "SalesOrders",
+          customers: "Customers",
+          products: "Commodities",
+          invoices: "SalesInvoices",
+          payments: "CustomerPayments",
+        },
       };
     }
-    
     return { success: false, error: "Sage authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Sage connection timed out or unreachable" };
   }
 }
 
 async function testDynamics365Connection(config: ERPConnectRequest) {
   try {
-    const response = await fetch(`${config.api_endpoint}/api/data/v9.2/WhoAmI`, {
-      headers: {
-        "Authorization": `Bearer ${config.credentials.access_token}`,
-        "OData-Version": "4.0",
+    const response = await fetchWithTimeout(
+      `${config.api_endpoint}/api/data/v9.2/WhoAmI`,
+      {
+        headers: {
+          Authorization: `Bearer ${config.credentials.access_token}`,
+          "OData-Version": "4.0",
+        },
       },
-    });
-
+    );
     if (response.ok) {
       return {
         success: true,
         entities: {
-          orders: 'salesorders',
-          customers: 'accounts',
-          products: 'products',
-          invoices: 'invoices',
-          payments: 'payments',
-        }
+          orders: "salesorders",
+          customers: "accounts",
+          products: "products",
+          invoices: "invoices",
+          payments: "payments",
+        },
       };
     }
-    
     return { success: false, error: "Dynamics 365 authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Dynamics 365 connection timed out or unreachable" };
   }
 }
 
 async function testCustomAPIConnection(config: ERPConnectRequest) {
   try {
-    const headers: any = { "Content-Type": "application/json" };
-    
-    if (config.credentials.auth_type === 'bearer') {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (config.credentials.auth_type === "bearer") {
       headers.Authorization = `Bearer ${config.credentials.token}`;
-    } else if (config.credentials.auth_type === 'basic') {
-      headers.Authorization = `Basic ${btoa(config.credentials.username + ':' + config.credentials.password)}`;
-    } else if (config.credentials.auth_type === 'api_key') {
-      headers[config.credentials.api_key_header || 'X-API-Key'] = config.credentials.api_key;
+    } else if (config.credentials.auth_type === "basic") {
+      headers.Authorization = `Basic ${btoa(
+        config.credentials.username + ":" + config.credentials.password
+      )}`;
+    } else if (config.credentials.auth_type === "api_key") {
+      headers[config.credentials.api_key_header ?? "X-API-Key"] = config.credentials.api_key;
     }
-
-    const response = await fetch(`${config.api_endpoint}${config.credentials.health_endpoint || '/health'}`, {
-      headers,
-    });
-
+    const response = await fetchWithTimeout(
+      `${config.api_endpoint}${config.credentials.health_endpoint ?? "/health"}`,
+      { headers },
+    );
     if (response.ok) {
-      return {
-        success: true,
-        entities: config.credentials.entities || {},
-      };
+      return { success: true, entities: config.credentials.entities ?? {} };
     }
-    
     return { success: false, error: "Custom API authentication failed" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Custom API connection timed out or unreachable" };
   }
 }
 
-function extractTokenData(config: ERPConnectRequest, connectionTest: any) {
+// ─── Token extraction ─────────────────────────────────────────────────────────
+
+function extractTokenData(config: ERPConnectRequest, _connectionTest: any) {
   const result: any = {
     access_token: null,
     refresh_token: null,
     expires_at: null,
-    token_type: 'Bearer',
+    token_type: "Bearer",
     oauth_config: {},
   };
 
-  // Extract OAuth tokens based on ERP system
   switch (config.erp_system) {
-    case 'quickbooks':
+    case "quickbooks":
       result.access_token = config.credentials.access_token;
       result.refresh_token = config.credentials.refresh_token;
       result.oauth_config = {
@@ -360,30 +380,28 @@ function extractTokenData(config: ERPConnectRequest, connectionTest: any) {
         realm_id: config.credentials.realm_id,
         token_url: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
       };
-      // QuickBooks tokens expire in 1 hour
       if (result.access_token) {
         result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
       }
       break;
 
-    case 'dynamics365':
+    case "dynamics365":
       result.access_token = config.credentials.access_token;
       result.refresh_token = config.credentials.refresh_token;
       result.oauth_config = {
         client_id: config.credentials.client_id,
         client_secret: config.credentials.client_secret,
         tenant_id: config.credentials.tenant_id,
-        scope: config.credentials.scope || "https://org.crm.dynamics.com/.default",
+        scope: config.credentials.scope ?? "https://org.crm.dynamics.com/.default",
         token_url: `https://login.microsoftonline.com/${config.credentials.tenant_id}/oauth2/v2.0/token`,
       };
-      // Microsoft tokens typically expire in 1 hour
       if (result.access_token) {
         result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
       }
       break;
 
-    case 'custom_api':
-      if (config.credentials.auth_type === 'bearer') {
+    case "custom_api":
+      if (config.credentials.auth_type === "bearer") {
         result.access_token = config.credentials.token;
         result.refresh_token = config.credentials.refresh_token;
         result.oauth_config = {
@@ -392,7 +410,9 @@ function extractTokenData(config: ERPConnectRequest, connectionTest: any) {
           token_url: config.credentials.token_url,
         };
         if (config.credentials.expires_in) {
-          result.expires_at = new Date(Date.now() + (config.credentials.expires_in * 1000)).toISOString();
+          result.expires_at = new Date(
+            Date.now() + config.credentials.expires_in * 1000
+          ).toISOString();
         }
       }
       break;
