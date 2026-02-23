@@ -172,7 +172,7 @@ async function refreshQuickBooksToken(integration: any) {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: `Basic ${btoa(
-          `${oauthConfig.client_id}:${oauthConfig.client_secret}`
+          `${oauthConfig.client_id}:${integration.oauth_client_secret}`
         )}`,
       },
       body: new URLSearchParams({
@@ -214,7 +214,7 @@ async function refreshDynamics365Token(integration: any) {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: oauthConfig.client_id,
-        client_secret: oauthConfig.client_secret,
+        client_secret: integration.oauth_client_secret,
         grant_type: "refresh_token",
         refresh_token: refreshToken,
         scope: oauthConfig.scope ?? "https://org.crm.dynamics.com/.default",
@@ -258,7 +258,7 @@ async function refreshCustomAPIToken(integration: any) {
         grant_type: "refresh_token",
         refresh_token: refreshToken,
         client_id: oauthConfig.client_id,
-        client_secret: oauthConfig.client_secret,
+        client_secret: integration.oauth_client_secret,
       }),
     });
 

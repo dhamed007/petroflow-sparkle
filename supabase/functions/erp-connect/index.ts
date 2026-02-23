@@ -110,10 +110,11 @@ serve(async (req) => {
     // Encryption happens via DB-side pgsodium RPC — the Edge Function never
     // touches the key. encryptSecret() throws on failure so plaintext can
     // never fall back to being stored unencrypted.
-    const [encCredentials, encAccessToken, encRefreshToken] = await Promise.all([
+    const [encCredentials, encAccessToken, encRefreshToken, encOAuthClientSecret] = await Promise.all([
       encryptSecret(supabase, JSON.stringify(connectRequest.credentials)),
       encryptSecret(supabase, tokenData.access_token),
       encryptSecret(supabase, tokenData.refresh_token),
+      encryptSecret(supabase, tokenData.oauth_client_secret),
     ]);
 
     // ── 6. Save integration (tenant_id from auth profile — never from body) ─
@@ -131,11 +132,12 @@ serve(async (req) => {
           connection_status: "connected",
           last_test_at: new Date().toISOString(),
           is_active: true,
-          access_token_encrypted: encAccessToken,  // ciphertext
-          refresh_token_encrypted: encRefreshToken, // ciphertext
+          access_token_encrypted: encAccessToken,           // ciphertext
+          refresh_token_encrypted: encRefreshToken,          // ciphertext
           token_expires_at: tokenData.expires_at,
           token_type: tokenData.token_type,
-          oauth_config: tokenData.oauth_config,
+          oauth_config: tokenData.oauth_config,              // no client_secret
+          oauth_client_secret_encrypted: encOAuthClientSecret, // ciphertext
           secrets_encrypted: true,
         },
         { onConflict: "tenant_id,erp_system" },
@@ -380,17 +382,20 @@ function extractTokenData(config: ERPConnectRequest, _connectionTest: any) {
     expires_at: null,
     token_type: "Bearer",
     oauth_config: {},
+    // client_secret is stored encrypted in a dedicated column — never in oauth_config
+    oauth_client_secret: null,
   };
 
   switch (config.erp_system) {
     case "quickbooks":
       result.access_token = config.credentials.access_token;
       result.refresh_token = config.credentials.refresh_token;
+      result.oauth_client_secret = config.credentials.client_secret ?? null;
       result.oauth_config = {
         client_id: config.credentials.client_id,
-        client_secret: config.credentials.client_secret,
         realm_id: config.credentials.realm_id,
         token_url: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+        // client_secret intentionally omitted — stored in oauth_client_secret_encrypted
       };
       if (result.access_token) {
         result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
@@ -400,12 +405,13 @@ function extractTokenData(config: ERPConnectRequest, _connectionTest: any) {
     case "dynamics365":
       result.access_token = config.credentials.access_token;
       result.refresh_token = config.credentials.refresh_token;
+      result.oauth_client_secret = config.credentials.client_secret ?? null;
       result.oauth_config = {
         client_id: config.credentials.client_id,
-        client_secret: config.credentials.client_secret,
         tenant_id: config.credentials.tenant_id,
         scope: config.credentials.scope ?? "https://org.crm.dynamics.com/.default",
         token_url: `https://login.microsoftonline.com/${config.credentials.tenant_id}/oauth2/v2.0/token`,
+        // client_secret intentionally omitted
       };
       if (result.access_token) {
         result.expires_at = new Date(Date.now() + 3600 * 1000).toISOString();
@@ -416,10 +422,11 @@ function extractTokenData(config: ERPConnectRequest, _connectionTest: any) {
       if (config.credentials.auth_type === "bearer") {
         result.access_token = config.credentials.token;
         result.refresh_token = config.credentials.refresh_token;
+        result.oauth_client_secret = config.credentials.client_secret ?? null;
         result.oauth_config = {
           client_id: config.credentials.client_id,
-          client_secret: config.credentials.client_secret,
           token_url: config.credentials.token_url,
+          // client_secret intentionally omitted
         };
         if (config.credentials.expires_in) {
           result.expires_at = new Date(
