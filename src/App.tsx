@@ -26,6 +26,7 @@ const Fleet = lazy(() => import("./pages/Fleet"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const ERPIntegrations = lazy(() => import("./pages/ERPIntegrations"));
 const Admin = lazy(() => import("./pages/Admin"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Analytics = lazy(() => import("./pages/Analytics"));
@@ -54,6 +55,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/onboarding" element={<AuthGuard><Onboarding /></AuthGuard>} />
               <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
               <Route path="/driver" element={<AuthGuard><RoleGuard allowedRoles={['driver']}><DriverDashboard /></RoleGuard></AuthGuard>} />

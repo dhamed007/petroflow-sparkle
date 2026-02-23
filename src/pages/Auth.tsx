@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Activity } from 'lucide-react';
+import { Activity, CheckCircle } from 'lucide-react';
 import { z } from 'zod';
+
+type AuthView = 'auth' | 'forgot' | 'sent';
 
 const signInSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -24,6 +26,7 @@ const signUpSchema = signInSchema.extend({
 });
 
 export default function Auth() {
+  const [view, setView] = useState<AuthView>('auth');
   const [isLoading, setIsLoading] = useState(false);
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
@@ -32,9 +35,32 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotError, setForgotError] = useState('');
+
   const { signIn, signUp } = useAuth();
   const navigate = useNavigate();
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    if (!forgotEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
+      setForgotError('Enter a valid email address');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      setView('sent');
+    } catch {
+      setForgotError('Failed to send reset email. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,16 +145,76 @@ export default function Auth() {
             <Activity className="w-8 h-8 text-accent" />
             <h1 className="text-2xl font-bold">PetroFlow</h1>
           </div>
-          <CardTitle>Welcome</CardTitle>
-          <CardDescription>Sign in to your account or create a new one</CardDescription>
+          {view === 'forgot' && <CardTitle>Reset Password</CardTitle>}
+          {view === 'sent' && <CardTitle>Check Your Email</CardTitle>}
+          {view === 'auth' && (
+            <>
+              <CardTitle>Welcome</CardTitle>
+              <CardDescription>Sign in to your account or create a new one</CardDescription>
+            </>
+          )}
         </CardHeader>
         <CardContent>
+
+          {/* ── Forgot password form ── */}
+          {view === 'forgot' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enter your account email and we'll send you a reset link.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                />
+                {forgotError && (
+                  <p className="text-sm text-destructive">{forgotError}</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Sending...' : 'Send Reset Link'}
+              </Button>
+              <button
+                type="button"
+                className="w-full text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                onClick={() => { setForgotError(''); setView('auth'); }}
+              >
+                Back to Sign In
+              </button>
+            </form>
+          )}
+
+          {/* ── Sent confirmation ── */}
+          {view === 'sent' && (
+            <div className="space-y-4 text-center">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+              <p className="text-sm text-muted-foreground">
+                A reset link has been sent to <strong>{forgotEmail}</strong>.
+                Check your inbox (and spam folder) and follow the link to set a new password.
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => { setForgotEmail(''); setView('auth'); }}
+              >
+                Back to Sign In
+              </Button>
+            </div>
+          )}
+
+          {/* ── Normal sign-in / sign-up tabs ── */}
+          {view === 'auth' && (
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -145,9 +231,18 @@ export default function Auth() {
                     <p className="text-sm text-destructive">{errors.email}</p>
                   )}
                 </div>
-                
+
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="signin-password">Password</Label>
+                    <button
+                      type="button"
+                      className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                      onClick={() => { setErrors({}); setForgotEmail(signInEmail); setView('forgot'); }}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   <Input
                     id="signin-password"
                     type="password"
@@ -159,7 +254,7 @@ export default function Auth() {
                     <p className="text-sm text-destructive">{errors.password}</p>
                   )}
                 </div>
-                
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
@@ -232,6 +327,8 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          )}
+
         </CardContent>
       </Card>
     </div>
