@@ -27,6 +27,7 @@ import {
   insertAuditLog,
   fetchWithTimeout,
   sanitizeError,
+  encryptSecret,
 } from "../_shared/erp-auth.ts";
 
 interface ERPConnectRequest {
@@ -105,7 +106,17 @@ serve(async (req) => {
     // ── 4. Extract token data ──────────────────────────────────────────────
     const tokenData = extractTokenData(connectRequest, connectionTest);
 
-    // ── 5. Save integration (tenant_id from auth profile — never from body) ─
+    // ── 5. Encrypt all secrets before writing to DB ────────────────────────
+    // Encryption happens via DB-side pgsodium RPC — the Edge Function never
+    // touches the key. encryptSecret() throws on failure so plaintext can
+    // never fall back to being stored unencrypted.
+    const [encCredentials, encAccessToken, encRefreshToken] = await Promise.all([
+      encryptSecret(supabase, JSON.stringify(connectRequest.credentials)),
+      encryptSecret(supabase, tokenData.access_token),
+      encryptSecret(supabase, tokenData.refresh_token),
+    ]);
+
+    // ── 6. Save integration (tenant_id from auth profile — never from body) ─
     const { data: integration, error: integrationError } = await supabase
       .from("erp_integrations")
       .upsert(
@@ -114,17 +125,18 @@ serve(async (req) => {
           erp_system: connectRequest.erp_system,
           name: connectRequest.name,
           is_sandbox: connectRequest.is_sandbox,
-          credentials_encrypted: connectRequest.credentials,
+          credentials_encrypted: encCredentials,   // ciphertext
           api_endpoint: connectRequest.api_endpoint,
           api_version: connectRequest.api_version,
           connection_status: "connected",
           last_test_at: new Date().toISOString(),
           is_active: true,
-          access_token_encrypted: tokenData.access_token,
-          refresh_token_encrypted: tokenData.refresh_token,
+          access_token_encrypted: encAccessToken,  // ciphertext
+          refresh_token_encrypted: encRefreshToken, // ciphertext
           token_expires_at: tokenData.expires_at,
           token_type: tokenData.token_type,
           oauth_config: tokenData.oauth_config,
+          secrets_encrypted: true,
         },
         { onConflict: "tenant_id,erp_system" },
       )
@@ -135,7 +147,7 @@ serve(async (req) => {
       throw new Error("Failed to save integration");
     }
 
-    // ── 6. Create default entity stubs ─────────────────────────────────────
+    // ── 7. Create default entity stubs ─────────────────────────────────────
     const defaultEntities = [
       { entity_type: "orders",    erp_entity_name: connectionTest.entities?.orders },
       { entity_type: "customers", erp_entity_name: connectionTest.entities?.customers },
@@ -158,7 +170,7 @@ serve(async (req) => {
       }
     }
 
-    // ── 7. Audit log (success) ─────────────────────────────────────────────
+    // ── 8. Audit log (success) ─────────────────────────────────────────────
     await insertAuditLog(supabase, auth.tenantId, auth.userId, "ERP_CONNECT", {
       erp_system: connectRequest.erp_system,
       integration_id: integration.id,
@@ -170,7 +182,7 @@ serve(async (req) => {
       await recordIdempotencyKey(supabase, idempotencyKey, auth.tenantId);
     }
 
-    // ── 8. Return sanitized integration (NO credentials/tokens) ───────────
+    // ── 9. Return sanitized integration (NO credentials/tokens) ───────────
     return erpResponse(true, "ERP connected successfully", { integration });
   } catch (error: any) {
     const status: number = typeof error.status === "number" ? error.status : 400;

@@ -30,6 +30,7 @@ import {
   insertAuditLog,
   fetchWithTimeout,
   sanitizeError,
+  getDecryptedIntegration,
 } from "../_shared/erp-auth.ts";
 
 serve(async (req) => {
@@ -80,14 +81,12 @@ serve(async (req) => {
       return erpError("Missing required fields: integration_id, entity_type, direction", 400);
     }
 
-    // ── 4. Fetch integration + cross-tenant ownership guard ────────────────
-    const { data: integration, error: integrationError } = await supabase
-      .from("erp_integrations")
-      .select("*")
-      .eq("id", integration_id)
-      .single();
-
-    if (integrationError || !integration) {
+    // ── 4. Fetch integration via decryption RPC + cross-tenant guard ───────
+    // Credentials are decrypted inside pgsodium — never returned as plaintext
+    // from direct column reads. The Edge Function receives decrypted values
+    // but never the encryption key.
+    const integration = await getDecryptedIntegration(supabase, integration_id);
+    if (!integration) {
       return erpError("Integration not found", 404);
     }
 
@@ -332,11 +331,9 @@ async function checkAndRefreshToken(
       return { valid: false, error: "Token refresh failed" };
     }
 
-    const { data: updatedIntegration } = await supabase
-      .from("erp_integrations")
-      .select("*")
-      .eq("id", integration.id)
-      .single();
+    // Re-fetch via RPC so the caller receives decrypted tokens from the
+    // newly-refreshed (and re-encrypted) row — not stale plaintext.
+    const updatedIntegration = await getDecryptedIntegration(supabase, integration.id);
 
     return { valid: true, refreshed: true, refreshed_integration: updatedIntegration };
   } catch (_err: any) {

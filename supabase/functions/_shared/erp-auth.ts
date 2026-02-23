@@ -265,6 +265,55 @@ export async function insertAuditLog(
   }
 }
 
+// ─── Credential encryption helpers ────────────────────────────────────────────
+// Encryption and decryption happen exclusively inside the DB (pgsodium).
+// Edge functions NEVER receive the encryption key — they only pass plaintext
+// to encrypt_secret() and receive ciphertext back, keeping the key server-side.
+
+/**
+ * Encrypts a plaintext value via the DB-side encrypt_secret() RPC.
+ * Returns null for null/empty input so callers can safely pass optional values.
+ * Throws with status 500 if encryption fails (prevents plaintext fallback).
+ */
+export async function encryptSecret(
+  supabase: SupabaseClient,
+  plaintext: string | null | undefined,
+): Promise<string | null> {
+  if (!plaintext) return null;
+  const { data, error } = await supabase.rpc("encrypt_secret", {
+    secret_value: plaintext,
+  });
+  if (error || !data) {
+    throw Object.assign(
+      new Error("Credential encryption failed — cannot write plaintext"),
+      { status: 500 },
+    );
+  }
+  return data as string;
+}
+
+/**
+ * Fetches a fully-decrypted ERP integration row via the SECURITY DEFINER RPC.
+ * Decryption happens inside the DB; the Edge Function never sees the key.
+ * Returns null if the integration does not exist.
+ */
+export async function getDecryptedIntegration(
+  supabase: SupabaseClient,
+  integrationId: string,
+): Promise<Record<string, any> | null> {
+  const { data, error } = await supabase.rpc("get_decrypted_erp_integration", {
+    p_integration_id: integrationId,
+  });
+  if (error) {
+    throw Object.assign(
+      new Error("Failed to fetch integration"),
+      { status: 500 },
+    );
+  }
+  const rows = Array.isArray(data) ? data : [];
+  return rows[0] ?? null;
+}
+
 // ─── Timeout-wrapped fetch ─────────────────────────────────────────────────────
 
 /**

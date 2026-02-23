@@ -24,6 +24,8 @@ import {
   insertAuditLog,
   fetchWithTimeout,
   sanitizeError,
+  encryptSecret,
+  getDecryptedIntegration,
 } from "../_shared/erp-auth.ts";
 
 serve(async (req) => {
@@ -45,14 +47,11 @@ serve(async (req) => {
       return erpError("Missing required field: integration_id", 400);
     }
 
-    // ── 2. Fetch integration ───────────────────────────────────────────────
-    const { data: integration, error: integrationError } = await supabase
-      .from("erp_integrations")
-      .select("*")
-      .eq("id", integration_id)
-      .single();
-
-    if (integrationError || !integration) {
+    // ── 2. Fetch integration via decryption RPC ────────────────────────────
+    // Reads ciphertext from DB and decrypts inside pgsodium — the Edge
+    // Function never receives the encryption key.
+    const integration = await getDecryptedIntegration(supabase, integration_id);
+    if (!integration) {
       return erpError("Integration not found", 404);
     }
 
@@ -110,13 +109,19 @@ serve(async (req) => {
       return erpError("Token refresh failed. Re-connect the integration.", 400);
     }
 
-    // ── 6. Persist new tokens ──────────────────────────────────────────────
+    // ── 6. Encrypt new tokens before persisting ────────────────────────────
+    const [encAccessToken, encRefreshToken] = await Promise.all([
+      encryptSecret(supabase, refreshResult.access_token ?? null),
+      encryptSecret(supabase, refreshResult.refresh_token ?? null),
+    ]);
+
     const { error: updateError } = await supabase
       .from("erp_integrations")
       .update({
-        access_token_encrypted: refreshResult.access_token,
-        refresh_token_encrypted: refreshResult.refresh_token,
+        access_token_encrypted: encAccessToken,   // ciphertext
+        refresh_token_encrypted: encRefreshToken, // ciphertext
         token_expires_at: refreshResult.expires_at,
+        secrets_encrypted: true,
         updated_at: new Date().toISOString(),
       })
       .eq("id", integration_id);
@@ -151,9 +156,12 @@ async function refreshQuickBooksToken(integration: any) {
     const tokenUrl =
       oauthConfig.token_url ??
       "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
-    const refreshToken =
-      integration.refresh_token_encrypted ??
-      integration.credentials_encrypted?.refresh_token;
+    // integration.refresh_token is already decrypted by get_decrypted_erp_integration.
+    // Fall back to credentials JSON for legacy QuickBooks credential-style storage.
+    const creds = integration.credentials
+      ? (() => { try { return JSON.parse(integration.credentials); } catch { return {}; } })()
+      : {};
+    const refreshToken = integration.refresh_token ?? creds?.refresh_token ?? null;
 
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
@@ -195,7 +203,7 @@ async function refreshDynamics365Token(integration: any) {
     const tokenUrl =
       oauthConfig.token_url ??
       `https://login.microsoftonline.com/${oauthConfig.tenant_id}/oauth2/v2.0/token`;
-    const refreshToken = integration.refresh_token_encrypted;
+    const refreshToken = integration.refresh_token; // decrypted by RPC
 
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
@@ -238,7 +246,7 @@ async function refreshCustomAPIToken(integration: any) {
       return { success: false, error: "No token refresh URL configured" };
     }
 
-    const refreshToken = integration.refresh_token_encrypted;
+    const refreshToken = integration.refresh_token; // decrypted by RPC
     if (!refreshToken) {
       return { success: false, error: "No refresh token available" };
     }
