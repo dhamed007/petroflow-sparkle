@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { User, Mail, Phone, Camera, Save, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Camera, Save, Loader2, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface Profile {
@@ -34,6 +34,13 @@ export default function Profile() {
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
+  });
+
+  const [changePw, setChangePw] = useState({
+    newPassword: '',
+    confirm: '',
+    saving: false,
+    error: '',
   });
 
   useEffect(() => {
@@ -173,6 +180,30 @@ export default function Profile() {
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePw(prev => ({ ...prev, error: '' }));
+
+    if (changePw.newPassword.length < 6) {
+      setChangePw(prev => ({ ...prev, error: 'Password must be at least 6 characters' }));
+      return;
+    }
+    if (changePw.newPassword !== changePw.confirm) {
+      setChangePw(prev => ({ ...prev, error: "Passwords don't match" }));
+      return;
+    }
+
+    setChangePw(prev => ({ ...prev, saving: true }));
+    try {
+      const { error } = await supabase.auth.updateUser({ password: changePw.newPassword });
+      if (error) throw error;
+      setChangePw({ newPassword: '', confirm: '', saving: false, error: '' });
+      toast({ title: 'Password changed', description: 'Your password has been updated successfully' });
+    } catch (error: any) {
+      setChangePw(prev => ({ ...prev, saving: false, error: error.message }));
     }
   };
 
@@ -318,6 +349,59 @@ export default function Profile() {
                   </>
                 )}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Change Password Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="w-4 h-4" />
+                Change Password
+              </CardTitle>
+              <CardDescription>Set a new password for your account</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleChangePassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="Minimum 6 characters"
+                    value={changePw.newPassword}
+                    onChange={(e) => setChangePw(prev => ({ ...prev, newPassword: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm New Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="Repeat new password"
+                    value={changePw.confirm}
+                    onChange={(e) => setChangePw(prev => ({ ...prev, confirm: e.target.value }))}
+                    required
+                  />
+                </div>
+                {changePw.error && (
+                  <p className="text-sm text-destructive">{changePw.error}</p>
+                )}
+                <Button type="submit" variant="outline" className="w-full" disabled={changePw.saving}>
+                  {changePw.saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4 mr-2" />
+                      Update Password
+                    </>
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
