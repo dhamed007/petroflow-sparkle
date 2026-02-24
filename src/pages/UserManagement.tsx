@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserPlus, Edit2, Trash2 } from 'lucide-react';
+import { Users, Shield, UserPlus, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ export default function UserManagement() {
   const { hasRole, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { limits, usage, canAddUser } = useSubscriptionLimits();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -233,7 +235,7 @@ export default function UserManagement() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -267,6 +269,35 @@ export default function UserManagement() {
               </div>
             </CardContent>
           </Card>
+
+          {limits && usage && (
+            <Card className={!canAddUser ? 'border-destructive' : ''}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Plan Limit</CardTitle>
+                {!canAddUser
+                  ? <AlertTriangle className="h-4 w-4 text-destructive" />
+                  : <Users className="h-4 w-4 text-muted-foreground" />
+                }
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {usage.users} / {limits.max_users}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {!canAddUser ? (
+                    <button
+                      className="text-destructive underline font-medium"
+                      onClick={() => navigate('/subscriptions')}
+                    >
+                      User limit reached — Upgrade
+                    </button>
+                  ) : (
+                    `seats used on ${limits.plan_name}`
+                  )}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Users List */}

@@ -7,6 +7,7 @@ import DashboardNav from "@/components/DashboardNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Package, Search, UserPlus } from "lucide-react";
+import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +21,7 @@ const Orders = () => {
   const { hasAnyRole } = useUserRole();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { limits, usage, canCreateOrder } = useSubscriptionLimits();
   const [orders, setOrders] = useState<any[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,10 +131,32 @@ const Orders = () => {
             <h1 className="text-3xl font-bold">Orders</h1>
             <p className="text-muted-foreground">Manage customer orders</p>
           </div>
-          <Button className="gap-2" onClick={handleCreateOrder}>
-            <Plus className="w-4 h-4" />
-            New Order
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            {limits && usage && (
+              <span className="text-sm text-muted-foreground">
+                {usage.monthly_orders} / {limits.max_monthly_transactions} orders this month
+              </span>
+            )}
+            <Button
+              className="gap-2"
+              disabled={!canCreateOrder}
+              onClick={handleCreateOrder}
+            >
+              <Plus className="w-4 h-4" />
+              New Order
+            </Button>
+            {!canCreateOrder && (
+              <p className="text-xs text-destructive">
+                Monthly order limit reached.{' '}
+                <button
+                  className="underline font-medium"
+                  onClick={() => navigate('/subscriptions')}
+                >
+                  Upgrade plan
+                </button>
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-4 mb-6">
@@ -207,6 +231,7 @@ const Orders = () => {
         onOpenChange={setDialogOpen}
         onSuccess={fetchOrders}
         order={editingOrder}
+        canCreateOrder={canCreateOrder}
       />
 
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>

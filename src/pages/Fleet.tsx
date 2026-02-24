@@ -9,14 +9,16 @@ import { Plus, Truck, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits";
 
 const Fleet = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { limits, usage, canAddTruck } = useSubscriptionLimits();
   const [trucks, setTrucks] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,23 +238,45 @@ const Fleet = () => {
             <h1 className="text-3xl font-bold">Fleet Management</h1>
             <p className="text-muted-foreground">Manage your trucks and vehicles</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2" onClick={() => {
+          <div className="flex flex-col items-end gap-1">
+            {limits && usage && (
+              <span className="text-sm text-muted-foreground">
+                {usage.trucks} / {limits.max_trucks} trucks used
+              </span>
+            )}
+            <Button
+              className="gap-2"
+              disabled={!canAddTruck}
+              onClick={() => {
+                if (!canAddTruck) return;
                 setEditingTruck(null);
-      setFormData({
-        plate_number: '',
-        capacity: '',
-        capacity_unit: 'liters',
-        status: 'available',
-        gps_device_id: '',
-        driver_id: '',
-      });
-              }}>
-                <Plus className="w-4 h-4" />
-                Add Truck
-              </Button>
-            </DialogTrigger>
+                setFormData({
+                  plate_number: '',
+                  capacity: '',
+                  capacity_unit: 'liters',
+                  status: 'available',
+                  gps_device_id: '',
+                  driver_id: '',
+                });
+                setDialogOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              Add Truck
+            </Button>
+            {!canAddTruck && (
+              <p className="text-xs text-destructive">
+                Truck limit reached.{' '}
+                <button
+                  className="underline font-medium"
+                  onClick={() => navigate('/subscriptions')}
+                >
+                  Upgrade plan
+                </button>
+              </p>
+            )}
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingTruck ? 'Edit Truck' : 'Add New Truck'}</DialogTitle>

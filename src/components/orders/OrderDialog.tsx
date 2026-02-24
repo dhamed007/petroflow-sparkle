@@ -13,9 +13,10 @@ interface OrderDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
   order?: any;
+  canCreateOrder?: boolean;
 }
 
-export function OrderDialog({ open, onOpenChange, onSuccess, order }: OrderDialogProps) {
+export function OrderDialog({ open, onOpenChange, onSuccess, order, canCreateOrder = true }: OrderDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -82,6 +83,16 @@ export function OrderDialog({ open, onOpenChange, onSuccess, order }: OrderDialo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!order && !canCreateOrder) {
+      toast({
+        title: 'Monthly order limit reached',
+        description: 'Upgrade your plan to create more orders this month.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
