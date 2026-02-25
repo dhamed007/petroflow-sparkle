@@ -111,6 +111,26 @@ export default function Onboarding() {
         throw new Error('Tenant not found. Please check the organization code.');
       }
 
+      // Check seat capacity before joining
+      const [{ count: currentUserCount }, { data: subData }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenant.id),
+        supabase
+          .from('tenant_subscriptions')
+          .select('subscription_plans(max_users)')
+          .eq('tenant_id', tenant.id)
+          .single(),
+      ]);
+
+      const maxUsers: number = (subData?.subscription_plans as any)?.max_users ?? -1;
+      if (maxUsers !== -1 && (currentUserCount ?? 0) >= maxUsers) {
+        throw new Error(
+          `This organization has reached its user limit (${maxUsers} seats). Ask your administrator to upgrade the plan.`
+        );
+      }
+
       // Update user profile with tenant_id
       const { error: profileError } = await supabase
         .from('profiles')
