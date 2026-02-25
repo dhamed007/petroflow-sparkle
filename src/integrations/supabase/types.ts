@@ -403,9 +403,11 @@ export type Database = {
           id: string
           integration_id: string
           is_manual: boolean | null
+          max_retries: number | null
           records_failed: number | null
           records_processed: number | null
           records_succeeded: number | null
+          retry_count: number | null
           started_at: string | null
           sync_direction: Database["public"]["Enums"]["erp_sync_direction"]
           sync_metadata: Json | null
@@ -421,9 +423,11 @@ export type Database = {
           id?: string
           integration_id: string
           is_manual?: boolean | null
+          max_retries?: number | null
           records_failed?: number | null
           records_processed?: number | null
           records_succeeded?: number | null
+          retry_count?: number | null
           started_at?: string | null
           sync_direction: Database["public"]["Enums"]["erp_sync_direction"]
           sync_metadata?: Json | null
@@ -439,9 +443,11 @@ export type Database = {
           id?: string
           integration_id?: string
           is_manual?: boolean | null
+          max_retries?: number | null
           records_failed?: number | null
           records_processed?: number | null
           records_succeeded?: number | null
+          retry_count?: number | null
           started_at?: string | null
           sync_direction?: Database["public"]["Enums"]["erp_sync_direction"]
           sync_metadata?: Json | null
@@ -1309,6 +1315,8 @@ export type Database = {
         | "completed"
         | "failed"
         | "cancelled"
+        | "retrying"
+        | "dead_letter"
       erp_system: "sap" | "oracle" | "odoo" | "dynamics" | "mock"
       erp_system_type:
         | "sap"
@@ -1471,6 +1479,8 @@ export const Constants = {
         "completed",
         "failed",
         "cancelled",
+        "retrying",
+        "dead_letter",
       ],
       erp_system: ["sap", "oracle", "odoo", "dynamics", "mock"],
       erp_system_type: [

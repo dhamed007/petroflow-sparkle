@@ -129,16 +129,21 @@ export const ERPFieldMapping = ({ integrationId, erpSystem }: ERPFieldMappingPro
     return fieldsByEntity[entityType] || [];
   };
 
-  const fetchERPFields = async (entityName: string) => {
-    // This would typically call the ERP API to get field schema
-    // For now, return mock data
-    return [
-      { name: 'name', type: 'string' },
-      { name: 'reference', type: 'string' },
-      { name: 'partner_id', type: 'relation' },
-      { name: 'amount_total', type: 'float' },
-      { name: 'state', type: 'selection' },
-    ];
+  const fetchERPFields = async (_entityName: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('erp-field-mapping-ai', {
+        body: { integration_id: integrationId, erp_system: erpSystem, action: 'get_schema' }
+      });
+      if (error) throw error;
+      return data.fields ?? [];
+    } catch (error: any) {
+      toast({
+        title: "Could not fetch ERP fields",
+        description: error.message || "Falling back to empty schema",
+        variant: "destructive",
+      });
+      return [];
+    }
   };
 
   const updateMapping = (entityType: string, fieldIndex: number, updates: any) => {
