@@ -150,7 +150,7 @@ const Inventory = () => {
         payload.tenant_id = tenantId;
         const { error } = await supabase
           .from('inventory')
-          .insert(payload);
+          .insert(payload as any);
         if (error) throw error;
         toast({ title: 'Inventory item added' });
       }

@@ -165,7 +165,7 @@ const Invoices = () => {
         payload.tenant_id = tenantId;
         const { error } = await supabase
           .from('invoices')
-          .insert(payload);
+          .insert(payload as any);
         if (error) throw error;
         toast({ title: `Invoice ${invoiceNumber} created` });
       }
