@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Shield, UserPlus, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { Users, Shield, UserPlus, Trash2, AlertTriangle } from 'lucide-react';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 import {
   Dialog,
@@ -18,6 +18,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -43,6 +53,7 @@ export default function UserManagement() {
   const [selectedRole, setSelectedRole] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; role: string } | null>(null);
 
   useEffect(() => {
     if (!roleLoading && !hasRole('tenant_admin') && !hasRole('super_admin')) {
@@ -76,29 +87,31 @@ export default function UserManagement() {
 
       setTenantId(profile.tenant_id);
 
-      // Get all users in this tenant
-      const { data: tenantUsers, error: usersError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, created_at')
-        .eq('tenant_id', profile.tenant_id);
-
-      if (usersError) throw usersError;
-
-      // Get roles for each user
-      const usersWithRoles = await Promise.all(
-        (tenantUsers || []).map(async (u) => {
-          const { data: roleData } = await supabase
+      // 2 parallel queries instead of N+1: fetch profiles + all tenant roles together
+      const [{ data: profiles, error: profilesError }, { data: allRoles }] =
+        await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, email, full_name, created_at')
+            .eq('tenant_id', profile.tenant_id),
+          supabase
             .from('user_roles')
-            .select('role')
-            .eq('user_id', u.id)
-            .eq('tenant_id', profile.tenant_id);
+            .select('user_id, role')
+            .eq('tenant_id', profile.tenant_id),
+        ]);
 
-          return {
-            ...u,
-            roles: roleData?.map((r) => r.role) || [],
-          };
-        })
-      );
+      if (profilesError) throw profilesError;
+
+      // Merge client-side: O(n) not O(n) queries
+      const rolesByUser = (allRoles || []).reduce<Record<string, string[]>>((acc, r) => {
+        (acc[r.user_id] ??= []).push(r.role);
+        return acc;
+      }, {});
+
+      const usersWithRoles = (profiles || []).map((u) => ({
+        ...u,
+        roles: rolesByUser[u.id] || [],
+      }));
 
       setUsers(usersWithRoles);
     } catch (error: any) {
@@ -168,7 +181,14 @@ export default function UserManagement() {
       }
     }
 
-    if (!confirm(`Are you sure you want to remove the ${role} role?`)) return;
+    // Open confirmation dialog instead of browser confirm()
+    setRemoveTarget({ userId, role });
+  };
+
+  const handleRemoveRoleConfirmed = async () => {
+    if (!removeTarget || !tenantId) return;
+    const { userId, role } = removeTarget;
+    setRemoveTarget(null);
 
     try {
       const { error } = await supabase
@@ -180,18 +200,10 @@ export default function UserManagement() {
 
       if (error) throw error;
 
-      toast({
-        title: 'Role removed',
-        description: `${role} role has been removed`,
-      });
-
+      toast({ title: 'Role removed', description: `${role} role has been removed` });
       fetchUsers();
     } catch (error: any) {
-      toast({
-        title: 'Error removing role',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error removing role', description: error.message, variant: 'destructive' });
     }
   };
 
@@ -415,6 +427,26 @@ export default function UserManagement() {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove the <strong>{removeTarget?.role.replace('_', ' ')}</strong> role? This takes effect immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveRoleConfirmed}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -17,12 +17,37 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
+// Set ALLOWED_ORIGIN env var to your frontend URL in production.
+// Falls back to "*" in local / unset environments.
+
+const _ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "*";
 
 export const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": _ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, idempotency-key",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  ..._ALLOWED_ORIGIN !== "*" ? { "Vary": "Origin" } : {},
 };
+
+/**
+ * Request-aware CORS — reflects the request origin only if it matches
+ * ALLOWED_ORIGIN. Use this in functions where the origin may differ per call.
+ */
+export function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  const allowed =
+    _ALLOWED_ORIGIN === "*" ? "*"
+    : origin === _ALLOWED_ORIGIN ? origin
+    : "null";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, idempotency-key",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 // ─── Standard response format ─────────────────────────────────────────────────
 

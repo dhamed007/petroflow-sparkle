@@ -4,6 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, Trash2, RotateCcw } from "lucide-react";
 
@@ -23,6 +33,7 @@ export const ERPSyncLogs = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
   const [dismissingIds, setDismissingIds] = useState<Set<string>>(new Set());
+  const [dismissTarget, setDismissTarget] = useState<any | null>(null);
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -80,8 +91,14 @@ export const ERPSyncLogs = () => {
     }
   };
 
-  const handleDismiss = async (log: any) => {
-    if (!confirm('Remove this dead-letter log entry? This cannot be undone.')) return;
+  const handleDismiss = (log: any) => {
+    setDismissTarget(log);
+  };
+
+  const handleDismissConfirmed = async () => {
+    if (!dismissTarget) return;
+    const log = dismissTarget;
+    setDismissTarget(null);
     setDismissingIds((prev) => new Set(prev).add(log.id));
     try {
       const { error } = await supabase.from('erp_sync_logs').delete().eq('id', log.id);
@@ -270,6 +287,28 @@ export const ERPSyncLogs = () => {
           </Card>
         ))
       )}
+
+      <AlertDialog open={!!dismissTarget} onOpenChange={(open) => { if (!open) setDismissTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Dismiss Dead-Letter Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete this dead-letter log for{' '}
+              <strong>{dismissTarget?.erp_integrations?.name ?? 'unknown'} — {dismissTarget?.entity_type}</strong>?
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDismissConfirmed}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Dismiss
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
