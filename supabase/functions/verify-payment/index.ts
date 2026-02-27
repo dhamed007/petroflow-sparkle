@@ -162,67 +162,50 @@ serve(async (req) => {
 
     const status = verificationResponse.data?.status === "success" ? "success" : "failed";
 
-    // ── Update transaction status ──────────────────────────────────────────
-    await supabase
-      .from("payment_transactions")
-      .update({
-        status,
-        paid_at: status === "success" ? new Date().toISOString() : null,
-        gateway_response: verificationResponse,
-      })
-      .eq("transaction_reference", reference);
+    // ── Atomically update transaction + activate subscription (or record failure) ──
+    //
+    // complete_payment_and_activate_subscription() wraps all DB mutations in a
+    // single PL/pgSQL transaction with SELECT FOR UPDATE locking.  This prevents
+    // the split-brain state where payment_transactions.status = 'success' but
+    // tenant_subscriptions was never updated (or vice-versa).
+    //
+    // For failed payments we only need a simple status update — no subscription
+    // action, no invoice marking, no locking needed.
+    if (status === "success") {
+      const subMeta = transaction.gateway_response?.subscription_metadata;
+      const isSubscription =
+        subMeta?.subscription_type === "petroflow_saas" && subMeta?.plan_id;
 
-    // ── Mark invoice paid ──────────────────────────────────────────────────
-    if (transaction.invoice_id && status === "success") {
-      await supabase
-        .from("invoices")
-        .update({ status: "paid", paid_date: new Date().toISOString() })
-        .eq("id", transaction.invoice_id);
-    }
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        "complete_payment_and_activate_subscription",
+        {
+          p_transaction_reference: reference,
+          p_gateway_response:      verificationResponse,
+          p_invoice_id:            transaction.invoice_id ?? null,
+          p_plan_id:               isSubscription ? subMeta.plan_id      : null,
+          p_tenant_id:             isSubscription ? subMeta.tenant_id    : null,
+          p_billing_cycle:         isSubscription ? subMeta.billing_cycle : null,
+        },
+      );
 
-    // ── Upsert subscription (idempotent — checks for existing record) ──────
-    if (status === "success" && transaction.gateway_response?.subscription_metadata) {
-      const metadata = transaction.gateway_response.subscription_metadata;
-      const currentPeriodStart = new Date();
-      const currentPeriodEnd = new Date();
-      if (metadata.billing_cycle === "monthly") {
-        currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
-      } else {
-        currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+      if (rpcError) {
+        console.error("[verify-payment] Atomic activation RPC failed:", rpcError.message);
+        throw rpcError;
       }
 
-      const { data: existingSub } = await supabase
-        .from("tenant_subscriptions")
-        .select("id")
-        .eq("tenant_id", metadata.tenant_id)
-        .maybeSingle();
-
-      if (existingSub) {
-        await supabase
-          .from("tenant_subscriptions")
-          .update({
-            plan_id: metadata.plan_id,
-            status: "active",
-            billing_cycle: metadata.billing_cycle,
-            current_period_start: currentPeriodStart.toISOString(),
-            current_period_end: currentPeriodEnd.toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingSub.id);
-      } else {
-        await supabase.from("tenant_subscriptions").insert({
-          tenant_id: metadata.tenant_id,
-          plan_id: metadata.plan_id,
-          status: "active",
-          billing_cycle: metadata.billing_cycle,
-          current_period_start: currentPeriodStart.toISOString(),
-          current_period_end: currentPeriodEnd.toISOString(),
-        });
+      const result = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+      if (!result?.success) {
+        throw new Error(result?.error ?? "complete_payment_and_activate_subscription returned false");
       }
 
+      if (result.idempotent) {
+        console.log("[verify-payment] Already processed (detected under lock):", reference);
+      }
+    } else {
+      // Payment failed — record the failure, no subscription action needed
       await supabase
         .from("payment_transactions")
-        .update({ subscription_id: existingSub?.id || null })
+        .update({ status, gateway_response: verificationResponse })
         .eq("transaction_reference", reference);
     }
 
