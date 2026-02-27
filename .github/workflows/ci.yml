@@ -13,7 +13,7 @@ concurrency:
 jobs:
   # ── Quality gate ───────────────────────────────────────────────────────────
   quality:
-    name: Lint + Type Check
+    name: Lint + Type Check + Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: TypeScript type check
         run: npx tsc --noEmit
@@ -33,11 +33,39 @@ jobs:
         run: npx eslint src --ext .ts,.tsx --max-warnings 0
         continue-on-error: true  # warn only until lint baseline is clean
 
+      - name: Security audit (production deps only)
+        # --production skips dev-only vulns (glob/minimatch in Vite tooling).
+        # Residual risks documented in SECURITY.md:
+        #   - jspdf: CVEs only exploitable via doc.html() with user-controlled input — we use doc.text()/autoTable() only
+        #   - xlsx: prototype pollution only on import/parse — we export only, never parse user files
+        #   - react-router open redirect: only exploitable via user-controlled navigate() args — all our redirects use hardcoded paths
+        run: npm audit --audit-level=high --production
+        continue-on-error: true  # track but don't block until baseline is documented
+
+  # ── Tests ──────────────────────────────────────────────────────────────────
+  test:
+    name: Unit + Integration Tests
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   # ── Build validation ───────────────────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, test]
     env:
       # Provide stub values so Vite can complete the build without real secrets
       VITE_SUPABASE_URL: https://placeholder.supabase.co
@@ -53,7 +81,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Build
         run: npm run build
@@ -98,3 +126,14 @@ jobs:
           # npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} dist/
           # Example for Netlify:
           # npx netlify deploy --prod --dir dist/ --auth ${{ secrets.NETLIFY_AUTH_TOKEN }}
+
+      - name: Create Sentry release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          npx @sentry/cli releases new ${{ github.sha }}
+          npx @sentry/cli releases set-commits ${{ github.sha }} --auto
+          npx @sentry/cli releases finalize ${{ github.sha }}
+        continue-on-error: true  # don't block deploy if Sentry secrets not yet configured

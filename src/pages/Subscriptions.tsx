@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Crown, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { type Currency, USD_PRICES, annualSavingsPct } from "@/config/pricing";
 
 const Subscriptions = () => {
   const { user } = useAuth();
@@ -16,6 +17,42 @@ const Subscriptions = () => {
   const [plans, setPlans] = useState<any[]>([]);
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState<Currency>(
+    () => (localStorage.getItem('pf_currency') as Currency) ?? 'NGN'
+  );
+
+  const handleCurrencyChange = (c: Currency) => {
+    setCurrency(c);
+    localStorage.setItem('pf_currency', c);
+  };
+
+  const getPlanPrice = (plan: any, billingCycle: 'monthly' | 'annual') => {
+    if (currency === 'USD') {
+      const tier = plan.tier as keyof typeof USD_PRICES;
+      if (!(tier in USD_PRICES)) return null;
+      return billingCycle === 'monthly' ? USD_PRICES[tier].monthly : USD_PRICES[tier].annual;
+    }
+    return billingCycle === 'monthly' ? plan.price_monthly : plan.price_annual;
+  };
+
+  const formatMonthlyPrice = (plan: any) => {
+    if (currency === 'USD') {
+      const tier = plan.tier as keyof typeof USD_PRICES;
+      if (!(tier in USD_PRICES)) return 'Custom';
+      return `$${USD_PRICES[tier].monthly}`;
+    }
+    return `₦${(plan.price_monthly / 1000).toFixed(0)}k`;
+  };
+
+  const formatAnnualLabel = (plan: any) => {
+    if (currency === 'USD') {
+      const tier = plan.tier as keyof typeof USD_PRICES;
+      if (!(tier in USD_PRICES)) return '';
+      const { monthly, annual } = USD_PRICES[tier];
+      return `or $${annual}/year (Save ${annualSavingsPct(monthly, annual)}%)`;
+    }
+    return `or ₦${(plan.price_annual / 1000).toFixed(0)}k/year (Save ${Math.round(((plan.price_monthly * 12 - plan.price_annual) / (plan.price_monthly * 12)) * 100)}%)`;
+  };
 
   useEffect(() => {
     if (!user) {
@@ -115,9 +152,13 @@ const Subscriptions = () => {
       // Subscription payments go through VisionsEdge's Paystack (app-level)
       // No need to check tenant's payment gateway configuration
 
-      // Calculate amount based on billing cycle
-      const amount = billingCycle === 'monthly' ? plan.price_monthly : plan.price_annual;
-      
+      // Calculate amount based on billing cycle and selected currency
+      const amount = getPlanPrice(plan, billingCycle);
+      if (amount === null) {
+        toast({ title: "Error", description: "Pricing not available for this plan in the selected currency", variant: "destructive" });
+        return;
+      }
+
       // Generate unique reference
       const reference = `SUB-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -133,7 +174,7 @@ const Subscriptions = () => {
       const { data, error } = await supabase.functions.invoke('process-payment', {
         body: {
           amount,
-          currency: 'NGN',
+          currency,
           email: profile.email,
           reference,
           gateway_type: 'paystack',
@@ -153,9 +194,13 @@ const Subscriptions = () => {
         return;
       }
 
-      // Redirect to Paystack payment page
-      if (data?.data?.authorization_url) {
-        window.location.href = data.data.authorization_url;
+      // Redirect to Paystack payment page — validate URL before navigating
+      const authUrl: string = data?.data?.authorization_url ?? '';
+      const isValidPaystackUrl =
+        authUrl.startsWith('https://checkout.paystack.com/') ||
+        authUrl.startsWith('https://standard.paystack.co/');
+      if (isValidPaystackUrl) {
+        window.location.href = authUrl;
       } else {
         toast({ title: "Error", description: "Failed to initialize payment", variant: "destructive" });
       }
@@ -192,7 +237,23 @@ const Subscriptions = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold mb-2">Choose Your Plan</h1>
-          <p className="text-muted-foreground">Select the perfect plan for your business needs</p>
+          <p className="text-muted-foreground mb-4">Select the perfect plan for your business needs</p>
+          <div className="inline-flex rounded-lg border p-1 gap-1">
+            <Button
+              size="sm"
+              variant={currency === 'NGN' ? 'default' : 'ghost'}
+              onClick={() => handleCurrencyChange('NGN')}
+            >
+              ₦ NGN
+            </Button>
+            <Button
+              size="sm"
+              variant={currency === 'USD' ? 'default' : 'ghost'}
+              onClick={() => handleCurrencyChange('USD')}
+            >
+              $ USD
+            </Button>
+          </div>
         </div>
 
         {currentSubscription && (
@@ -233,11 +294,11 @@ const Subscriptions = () => {
                 </div>
                 <CardTitle className="text-2xl">{plan.name}</CardTitle>
                 <CardDescription>
-                  <span className="text-3xl font-bold">₦{(plan.price_monthly / 1000).toFixed(0)}k</span>
+                  <span className="text-3xl font-bold">{formatMonthlyPrice(plan)}</span>
                   <span className="text-muted-foreground">/month</span>
                 </CardDescription>
                 <p className="text-sm text-muted-foreground">
-                  or ₦{(plan.price_annual / 1000).toFixed(0)}k/year (Save {Math.round(((plan.price_monthly * 12 - plan.price_annual) / (plan.price_monthly * 12)) * 100)}%)
+                  {formatAnnualLabel(plan)}
                 </p>
               </CardHeader>
               <CardContent>

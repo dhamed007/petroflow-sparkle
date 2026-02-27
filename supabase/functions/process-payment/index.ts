@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from "../_shared/erp-auth.ts";
 
 interface PaymentRequest {
   amount: number;
@@ -35,8 +31,10 @@ interface DecryptedGateway {
 }
 
 serve(async (req) => {
+  const cors = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
@@ -78,7 +76,7 @@ serve(async (req) => {
 
     if (!rateError && (recentCount ?? 0) >= 5) {
       return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again in 60 seconds." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" },
+        headers: { ...cors, "Content-Type": "application/json", "Retry-After": "60" },
         status: 429,
       });
     }
@@ -178,13 +176,13 @@ serve(async (req) => {
     console.log("Payment processed successfully for reference:", paymentRequest.reference);
 
     return new Response(JSON.stringify(paymentResponse), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error: any) {
     console.error("Payment processing error:", error.message);
     return new Response(JSON.stringify({ error: "Payment processing failed" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
       status: 400,
     });
   }
