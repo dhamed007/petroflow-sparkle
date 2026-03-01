@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthGuardProps {
@@ -9,55 +8,69 @@ interface AuthGuardProps {
   requireAuth?: boolean;
 }
 
+/**
+ * AuthGuard fetches profile + role in a single async check after auth
+ * settles. It does NOT depend on useUserRole's state timing — that hook
+ * was causing a race where roleLoading=false before the DB fetch completed,
+ * making primaryRole=null and redirecting super_admins to onboarding.
+ */
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
   const { user, loading: authLoading } = useAuth();
-  const { primaryRole, loading: roleLoading } = useUserRole();
   const navigate = useNavigate();
   const location = useLocation();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const checkAuthAndRole = async () => {
-      if (authLoading || roleLoading) return;
+    if (authLoading) return;
 
-      // Not authenticated but auth required
-      if (requireAuth && !user) {
-        navigate('/auth', { replace: true });
+    const check = async () => {
+      setChecking(true);
+
+      // Not authenticated
+      if (!user) {
+        if (requireAuth) navigate('/auth', { replace: true });
+        setChecking(false);
         return;
       }
 
-      // Authenticated but no redirect needed for public routes
-      if (!requireAuth) return;
+      if (!requireAuth) {
+        setChecking(false);
+        return;
+      }
 
-      // Check if user has tenant
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('tenant_id')
-          .eq('id', user.id)
-          .single();
+      // Fetch profile and role in parallel
+      const [{ data: profile }, { data: roleRows }] = await Promise.all([
+        supabase.from('profiles').select('tenant_id').eq('id', user.id).single(),
+        supabase.from('user_roles').select('role').eq('user_id', user.id),
+      ]);
 
-        // No tenant - send to onboarding, unless user is a platform super_admin
-        // (super_admins are not members of any tenant; they own the platform)
-        if (!profile?.tenant_id && primaryRole !== 'super_admin' && location.pathname !== '/onboarding') {
-          navigate('/onboarding', { replace: true });
-          return;
-        }
+      const roles = (roleRows ?? []).map((r: any) => r.role as string);
+      const isSuperAdmin = roles.includes('super_admin');
+      const tenantId = profile?.tenant_id ?? null;
 
-        // Has tenant - check role-based routing
-        if (profile?.tenant_id && location.pathname === '/dashboard') {
-          if (primaryRole === 'driver') {
-            navigate('/driver', { replace: true });
-          } else if (primaryRole === 'client') {
-            navigate('/client', { replace: true });
-          }
+      // No tenant and not a super_admin → onboarding
+      if (!tenantId && !isSuperAdmin && location.pathname !== '/onboarding') {
+        navigate('/onboarding', { replace: true });
+        setChecking(false);
+        return;
+      }
+
+      // Role-based dashboard redirect
+      if (location.pathname === '/dashboard') {
+        if (roles.includes('driver')) {
+          navigate('/driver', { replace: true });
+        } else if (roles.includes('client') && !roles.includes('tenant_admin') && !isSuperAdmin) {
+          navigate('/client', { replace: true });
         }
       }
+
+      setChecking(false);
     };
 
-    checkAuthAndRole();
-  }, [user, primaryRole, authLoading, roleLoading, navigate, location, requireAuth]);
+    check();
+  }, [user, authLoading, navigate, location.pathname, requireAuth]);
 
-  if (authLoading || roleLoading) {
+  if (authLoading || checking) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
