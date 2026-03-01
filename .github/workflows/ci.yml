@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, staging]
+    branches: [main, develop, staging]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -67,9 +67,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [quality, test]
     env:
-      # Provide stub values so Vite can complete the build without real secrets
+      # Provide stub values so Vite can complete the build without real secrets.
+      # VITE_SUPABASE_PUBLISHABLE_KEY matches what client.ts reads at runtime.
       VITE_SUPABASE_URL: https://placeholder.supabase.co
-      VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+      VITE_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
       VITE_SUPABASE_PROJECT_ID: placeholder
       VITE_SENTRY_DSN: ""
     steps:
@@ -104,7 +105,31 @@ jobs:
           path: dist/
           retention-days: 3
 
-  # ── Production deploy gate (manual approval required) ─────────────────────
+  # ── Preview deploy (develop branch) ───────────────────────────────────────
+  deploy-preview:
+    name: Deploy Preview (develop)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist/
+
+      - name: Deploy preview to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm install -g vercel --silent
+          vercel deploy dist/ --token $VERCEL_TOKEN --yes 2>&1 | tee vercel-preview.txt
+          echo "Preview URL: $(tail -1 vercel-preview.txt)"
+        continue-on-error: true  # don't block if Vercel secrets not yet added
+
+  # ── Production deploy gate (main only, manual approval required) ───────────
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -118,14 +143,14 @@ jobs:
           name: dist-${{ github.sha }}
           path: dist/
 
-      - name: Notify deployment
+      - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          echo "✅ Production deployment approved for ${{ github.sha }}"
-          echo "Deploy dist/ to your hosting provider here."
-          # Example for Vercel:
-          # npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }} dist/
-          # Example for Netlify:
-          # npx netlify deploy --prod --dir dist/ --auth ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          npm install -g vercel --silent
+          vercel deploy dist/ --token $VERCEL_TOKEN --prod --yes
 
       - name: Create Sentry release
         env:
