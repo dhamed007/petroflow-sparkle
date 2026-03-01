@@ -26,3 +26,12 @@ verify_jwt = true
 
 [functions.erp-webhook]
 verify_jwt = false
+
+[functions.health]
+verify_jwt = false
+
+[functions.erp-sync-retry]
+verify_jwt = true
+
+[functions.export-tenant-data]
+verify_jwt = true
