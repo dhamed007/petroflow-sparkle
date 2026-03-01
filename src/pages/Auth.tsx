@@ -72,17 +72,22 @@ export default function Auth() {
       const { error } = await signIn(signInEmail, signInPassword);
       
       if (!error) {
-        // Check if user has tenant - if not, go to onboarding
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('tenant_id')
-          .eq('id', (await supabase.auth.getUser()).data.user?.id)
-          .single();
-        
-        if (!profile?.tenant_id) {
+        const userId = (await supabase.auth.getUser()).data.user?.id;
+
+        // Fetch profile and roles in parallel
+        const [{ data: profile }, { data: roleRows }] = await Promise.all([
+          supabase.from('profiles').select('tenant_id').eq('id', userId).single(),
+          supabase.from('user_roles').select('role').eq('user_id', userId),
+        ]);
+
+        const isSuperAdmin = (roleRows ?? []).some((r: any) => r.role === 'super_admin');
+
+        if (isSuperAdmin) {
+          // Platform owner — goes straight to admin panel, no tenant needed
+          navigate('/admin');
+        } else if (!profile?.tenant_id) {
           navigate('/onboarding');
         } else {
-          // Will be redirected based on role via AuthGuard
           navigate('/dashboard');
         }
       }
