@@ -37,11 +37,17 @@ export default function Dashboard() {
 
     // Check if user has completed onboarding
     const checkOnboarding = async () => {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single();
+      const [{ data: profile }, { data: roleRows }] = await Promise.all([
+        supabase.from('profiles').select('tenant_id').eq('id', user.id).single(),
+        supabase.from('user_roles').select('role').eq('user_id', user.id),
+      ]);
+
+      const isSuperAdmin = (roleRows ?? []).some((r: any) => r.role === 'super_admin');
+
+      if (isSuperAdmin) {
+        navigate('/admin');
+        return;
+      }
 
       if (!profile?.tenant_id) {
         navigate('/onboarding');
