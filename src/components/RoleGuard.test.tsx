@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { RoleGuard } from './RoleGuard';
 import { useUserRole } from '@/hooks/useUserRole';
+import type { UserRole } from '@/hooks/useUserRole';
 
 vi.mock('@/hooks/useUserRole');
 
@@ -12,9 +13,12 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+const mockRoleBase = { hasRole: vi.fn(() => false), hasAnyRole: vi.fn(() => false) };
+
 describe('RoleGuard', () => {
   it('renders children when user has an allowed role', () => {
     vi.mocked(useUserRole).mockReturnValue({
+      ...mockRoleBase,
       roles: ['tenant_admin'],
       primaryRole: 'tenant_admin',
       loading: false,
@@ -33,6 +37,7 @@ describe('RoleGuard', () => {
 
   it('renders nothing and redirects when role is not allowed', () => {
     vi.mocked(useUserRole).mockReturnValue({
+      ...mockRoleBase,
       roles: ['driver'],
       primaryRole: 'driver',
       loading: false,
@@ -52,6 +57,7 @@ describe('RoleGuard', () => {
 
   it('redirects client users to /client', () => {
     vi.mocked(useUserRole).mockReturnValue({
+      ...mockRoleBase,
       roles: ['client'],
       primaryRole: 'client',
       loading: false,
@@ -70,8 +76,9 @@ describe('RoleGuard', () => {
 
   it('redirects to custom redirectTo path for unrecognised roles', () => {
     vi.mocked(useUserRole).mockReturnValue({
-      roles: ['manager'],
-      primaryRole: 'manager',
+      ...mockRoleBase,
+      roles: ['sales_rep' as UserRole],
+      primaryRole: 'sales_rep' as UserRole,
       loading: false,
     });
 
@@ -88,6 +95,7 @@ describe('RoleGuard', () => {
 
   it('shows loading spinner while roles are resolving', () => {
     vi.mocked(useUserRole).mockReturnValue({
+      ...mockRoleBase,
       roles: [],
       primaryRole: null,
       loading: true,
