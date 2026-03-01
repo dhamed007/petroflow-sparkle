@@ -14,10 +14,13 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+const mockAuthBase = { session: null, signIn: vi.fn(), signUp: vi.fn(), signOut: vi.fn() };
+const mockRoleBase = { hasRole: vi.fn(() => false), hasAnyRole: vi.fn(() => false) };
+
 describe('AuthGuard', () => {
   it('renders children when user is authenticated', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: { id: 'u1' } as any, loading: false });
-    vi.mocked(useUserRole).mockReturnValue({ roles: ['tenant_admin'], primaryRole: 'tenant_admin', loading: false });
+    vi.mocked(useAuth).mockReturnValue({ ...mockAuthBase, user: { id: 'u1' } as any, loading: false });
+    vi.mocked(useUserRole).mockReturnValue({ ...mockRoleBase, roles: ['tenant_admin'], primaryRole: 'tenant_admin', loading: false });
 
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
@@ -31,8 +34,8 @@ describe('AuthGuard', () => {
   });
 
   it('shows loading spinner while auth is resolving', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: true });
-    vi.mocked(useUserRole).mockReturnValue({ roles: [], primaryRole: null, loading: true });
+    vi.mocked(useAuth).mockReturnValue({ ...mockAuthBase, user: null, loading: true });
+    vi.mocked(useUserRole).mockReturnValue({ ...mockRoleBase, roles: [], primaryRole: null, loading: true });
 
     render(
       <MemoryRouter>
@@ -42,14 +45,13 @@ describe('AuthGuard', () => {
       </MemoryRouter>
     );
 
-    // Loading spinner shown, children not rendered
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
   it('navigates to /auth when unauthenticated and requireAuth=true', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false });
-    vi.mocked(useUserRole).mockReturnValue({ roles: [], primaryRole: null, loading: false });
+    vi.mocked(useAuth).mockReturnValue({ ...mockAuthBase, user: null, loading: false });
+    vi.mocked(useUserRole).mockReturnValue({ ...mockRoleBase, roles: [], primaryRole: null, loading: false });
 
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
@@ -63,8 +65,8 @@ describe('AuthGuard', () => {
   });
 
   it('renders children on public routes without auth', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false });
-    vi.mocked(useUserRole).mockReturnValue({ roles: [], primaryRole: null, loading: false });
+    vi.mocked(useAuth).mockReturnValue({ ...mockAuthBase, user: null, loading: false });
+    vi.mocked(useUserRole).mockReturnValue({ ...mockRoleBase, roles: [], primaryRole: null, loading: false });
 
     render(
       <MemoryRouter initialEntries={['/']}>

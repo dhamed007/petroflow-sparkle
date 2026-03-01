@@ -49,7 +49,11 @@ describe('Subscriptions page', () => {
   beforeEach(() => {
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'user-1', email: 'test@example.com' } as any,
+      session: null,
       loading: false,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      signOut: vi.fn(),
     });
 
     // Mock supabase.from chain to return plans
@@ -155,7 +159,7 @@ describe('Subscriptions page', () => {
   });
 
   it('redirects unauthenticated users to /auth', () => {
-    vi.mocked(useAuth).mockReturnValue({ user: null, loading: false });
+    vi.mocked(useAuth).mockReturnValue({ user: null, session: null, loading: false, signIn: vi.fn(), signUp: vi.fn(), signOut: vi.fn() });
     renderSubscriptions();
     expect(mockNavigate).toHaveBeenCalledWith('/auth');
   });

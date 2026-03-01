@@ -771,6 +771,24 @@ export type Database = {
           },
         ]
       }
+      payment_ip_rate_limits: {
+        Row: {
+          id: string
+          ip_hash: string
+          request_time: string
+        }
+        Insert: {
+          id?: string
+          ip_hash: string
+          request_time?: string
+        }
+        Update: {
+          id?: string
+          ip_hash?: string
+          request_time?: string
+        }
+        Relationships: []
+      }
       payment_transactions: {
         Row: {
           amount: number
@@ -1224,6 +1242,17 @@ export type Database = {
       }
     }
     Functions: {
+      complete_payment_and_activate_subscription: {
+        Args: {
+          p_billing_cycle?: string
+          p_gateway_response: Json
+          p_invoice_id?: string
+          p_plan_id?: string
+          p_tenant_id?: string
+          p_transaction_reference: string
+        }
+        Returns: Json
+      }
       create_audit_log: {
         Args: {
           p_action: string
@@ -1288,6 +1317,17 @@ export type Database = {
           logo_url: string
           name: string
           slug: string
+        }[]
+      }
+      rpc_check_payment_ip_rate_limit: {
+        Args: {
+          p_ip_hash: string
+          p_max_requests?: number
+          p_window_seconds?: number
+        }
+        Returns: {
+          allowed: boolean
+          retry_after_secs: number
         }[]
       }
     }
