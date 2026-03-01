@@ -13,9 +13,15 @@ export function useUserRole() {
   useEffect(() => {
     const fetchUserRoles = async () => {
       if (!user) {
+        setRoles([]);
+        setPrimaryRole(null);
         setLoading(false);
         return;
       }
+
+      // Keep loading=true while fetching so AuthGuard doesn't check
+      // before roles are known (prevents premature onboarding redirect).
+      setLoading(true);
 
       const { data, error } = await supabase
         .from('user_roles')
