@@ -36,8 +36,9 @@ export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
           .eq('id', user.id)
           .single();
 
-        // No tenant - send to onboarding
-        if (!profile?.tenant_id && location.pathname !== '/onboarding') {
+        // No tenant - send to onboarding, unless user is a platform super_admin
+        // (super_admins are not members of any tenant; they own the platform)
+        if (!profile?.tenant_id && primaryRole !== 'super_admin' && location.pathname !== '/onboarding') {
           navigate('/onboarding', { replace: true });
           return;
         }
