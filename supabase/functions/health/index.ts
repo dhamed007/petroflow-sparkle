@@ -30,15 +30,14 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Lightweight connectivity check — single row, no table scan
-    const { error } = await supabase.rpc("get_user_tenant_id").limit(0);
+    // Lightweight connectivity check — reads at most 1 row from profiles.
+    // Service role bypasses RLS so this always works regardless of data.
+    const { error } = await supabase
+      .from("profiles")
+      .select("id")
+      .limit(1);
 
-    // We expect PGRST116 (no rows) or similar non-error results.
-    // Any network/auth error is what we're catching.
-    if (error && error.code !== "PGRST116" && error.code !== "42883") {
-      // 42883 = function does not exist (acceptable — proves DB responded)
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
   } catch (err) {
     dbStatus = "error";
     httpStatus = 503;
