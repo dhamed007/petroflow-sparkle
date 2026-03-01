@@ -1,57 +1,55 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { CORS_HEADERS } from "../_shared/erp-auth.ts";
 
 /**
  * Public health-check endpoint — no auth required.
- * Used by UptimeRobot and other external monitors.
+ * Fully self-contained: no shared imports, no supabase-js client.
+ * Uses a direct fetch to the PostgREST API to verify DB connectivity.
  *
  * Returns:
  *   200  { status: "ok",       db: "ok",    ts: "<ISO>" }
  *   503  { status: "degraded", db: "error", ts: "<ISO>" }
  */
 serve(async (req) => {
-  // Allow CORS preflight
+  const CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+  };
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { headers: CORS });
   }
 
   const ts = new Date().toISOString();
-  let dbStatus = "ok";
-  let httpStatus = 200;
+  let dbOk = false;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Missing Supabase environment variables");
+    if (!supabaseUrl || !serviceKey) {
+      throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Direct PostgREST call — no supabase-js needed.
+    // SELECT id FROM profiles LIMIT 1 via REST API.
+    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?select=id&limit=1`, {
+      headers: {
+        "apikey":        serviceKey,
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+    });
 
-    // Lightweight connectivity check — reads at most 1 row from profiles.
-    // Service role bypasses RLS so this always works regardless of data.
-    const { error } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1);
-
-    if (error) throw new Error(error.message);
+    if (!res.ok) throw new Error(`PostgREST returned ${res.status}`);
+    dbOk = true;
   } catch (err) {
-    dbStatus = "error";
-    httpStatus = 503;
-    console.error("[health] DB check failed:", err instanceof Error ? err.message : err);
+    console.error("[health] DB check failed:", err instanceof Error ? err.message : String(err));
   }
 
-  const body = JSON.stringify({
-    status: httpStatus === 200 ? "ok" : "degraded",
-    db: dbStatus,
-    ts,
-  });
-
-  return new Response(body, {
-    status: httpStatus,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-cache" },
-  });
+  return new Response(
+    JSON.stringify({ status: dbOk ? "ok" : "degraded", db: dbOk ? "ok" : "error", ts }),
+    {
+      status: dbOk ? 200 : 503,
+      headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-cache" },
+    },
+  );
 });
